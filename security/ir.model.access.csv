@@ -1,0 +1,5 @@
+id,name,model_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_salida_acopio,access_salida_acopio,model_salida_acopio,1,1,1,1
+access_salida_acopio_linea,access_salida_acopio_linea,model_salida_acopio_linea,1,1,1,1
+access_salida_acopio_wizard,access_salida_acopio_wizard,model_salida_acopio_wizard,1,1,1,1
+access_salida_acopio_wizard_linea,access_salida_acopio_wizard_linea,model_salida_acopio_wizard_linea,1,1,1,1

@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <!-- Vista del wizard para salida de acopio -->
+    <record id="view_salida_acopio_wizard_form" model="ir.ui.view">
+        <field name="name">salida.acopio.wizard.form</field>
+        <field name="model">salida.acopio.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Salida de Acopio">
+                <div class="alert alert-warning" style="margin-bottom: 20px;">
+                    <h4><strong>📤 Salida de Acopio del Inventario</strong></h4>
+                    <p>
+                        Se van a dar de salida residuos desde la ubicación "Acopio" del inventario 
+                        y se generará automáticamente un manifiesto ambiental donde <strong>SAI es el generador</strong>.
+                    </p>
+                </div>
+
+                <group string="Información del Transporte" col="2">
+                    <field name="transportista_id" 
+                           placeholder="Transportista (SAI por defecto)..."
+                           options="{'no_create': True}"/>
+                    <field name="destinatario_id" 
+                           placeholder="Seleccione el destinatario final..."
+                           options="{'no_create': True}"/>
+                </group>
+
+                <group string="Resumen" col="2">
+                    <field name="total_residuos" readonly="1"/>
+                    <field name="cantidad_total" readonly="1"/>
+                </group>
+
+                <group string="Residuos a Dar de Salida">
+                    <field name="linea_ids" nolabel="1">
+                        <list editable="bottom" string="Residuos">
+                            <field name="producto_id" 
+                                   placeholder="Seleccione producto con stock en Acopio..."
+                                   options="{'no_create': True}"/>
+                            <field name="lote_id" 
+                                   domain="[('id', 'in', lotes_disponibles_ids)]"
+                                   options="{'no_create': True}"/>
+                            <field name="stock_disponible" readonly="1"/>
+                            <field name="cantidad" 
+                                   decoration-bf="cantidad > stock_disponible"
+                                   decoration-danger="cantidad > stock_disponible"/>
+                            <field name="clasificaciones_cretib" readonly="1" optional="show"/>
+                            <field name="lotes_disponibles_ids" column_invisible="1"/>
+                        </list>
+                        <form string="Línea de Residuo">
+                            <group col="2">
+                                <field name="producto_id" 
+                                       placeholder="Seleccione producto con stock en Acopio..."
+                                       options="{'no_create': True}"/>
+                                <field name="lote_id" 
+                                       domain="[('id', 'in', lotes_disponibles_ids)]"
+                                       options="{'no_create': True}"/>
+                                <field name="stock_disponible" readonly="1"/>
+                                <field name="cantidad"/>
+                                <field name="clasificaciones_cretib" readonly="1"/>
+                                <field name="lotes_disponibles_ids" invisible="1"/>
+                            </group>
+                            
+                            <div class="alert alert-info" invisible="not lotes_disponibles_ids">
+                                <strong>Lotes disponibles para este producto:</strong>
+                                <field name="lotes_disponibles_ids" widget="many2many_tags" readonly="1"/>
+                            </div>
+                        </form>
+                    </field>
+                </group>
+
+                <group string="Observaciones">
+                    <field name="observaciones" 
+                           nolabel="1" 
+                           placeholder="Observaciones adicionales para la salida y el manifiesto..."/>
+                </group>
+
+                <div class="alert alert-info" style="margin-top: 15px;">
+                    <strong>ℹ️ Información importante:</strong>
+                    <ul style="margin: 5px 0;">
+                        <li>Solo se muestran productos que tienen stock en la ubicación "Acopio"</li>
+                        <li>Para productos con seguimiento por lotes, debe seleccionar un lote específico</li>
+                        <li>Se verificará que haya stock suficiente antes de confirmar</li>
+                        <li>Se generará automáticamente un manifiesto donde SAI aparece como generador</li>
+                        <li>Esta operación creará movimientos de inventario de salida</li>
+                    </ul>
+                </div>
+
+                <footer>
+                    <button string="✅ Confirmar Salida" 
+                            name="action_confirmar_salida" 
+                            type="object" 
+                            class="btn-primary"
+                            confirm="¿Está seguro de que desea realizar la salida de acopio? Se crearán movimientos de inventario y un manifiesto ambiental."/>
+                    <button string="Cancelar" 
+                            class="btn-secondary" 
+                            special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

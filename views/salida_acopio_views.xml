@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <!-- Acción principal para salida de acopio -->
+    <record id="action_salida_acopio" model="ir.actions.act_window">
+        <field name="name">Salidas de Acopio</field>
+        <field name="res_model">salida.acopio</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No hay salidas de acopio registradas
+            </p>
+            <p>
+                Las salidas de acopio permiten dar de salida residuos del inventario hacia su disposición final,
+                generando automáticamente manifiestos donde SAI es el generador.
+            </p>
+        </field>
+    </record>
+
+    <!-- Acción para abrir wizard de nueva salida -->
+    <record id="action_salida_acopio_wizard" model="ir.actions.act_window">
+        <field name="name">Nueva Salida de Acopio</field>
+        <field name="res_model">salida.acopio.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <!-- Vista de lista para salida de acopio -->
+    <record id="view_salida_acopio_list" model="ir.ui.view">
+        <field name="name">salida.acopio.list</field>
+        <field name="model">salida.acopio</field>
+        <field name="arch" type="xml">
+            <list string="Salidas de Acopio" default_order="fecha_salida desc">
+                <header>
+                    <button name="%(action_salida_acopio_wizard)d" 
+                            string="Nueva Salida" 
+                            type="action" 
+                            class="btn-primary"/>
+                </header>
+                <field name="numero_referencia"/>
+                <field name="transportista_id"/>
+                <field name="destinatario_id"/>
+                <field name="fecha_salida"/>
+                <field name="usuario_salida"/>
+                <field name="total_residuos"/>
+                <field name="cantidad_total"/>
+                <field name="manifiesto_salida_id"/>
+                <field name="state" decoration-success="state == 'done'" decoration-muted="state == 'cancel'"/>
+                <button name="action_view_picking" 
+                        type="object" 
+                        string="Ver Transferencia" 
+                        class="btn-link"
+                        invisible="state != 'done'"/>
+                <button name="action_view_manifiesto" 
+                        type="object" 
+                        string="Ver Manifiesto" 
+                        class="btn-link"
+                        invisible="state != 'done'"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Vista de formulario para salida de acopio -->
+    <record id="view_salida_acopio_form" model="ir.ui.view">
+        <field name="name">salida.acopio.form</field>
+        <field name="model">salida.acopio</field>
+        <field name="arch" type="xml">
+            <form string="Salida de Acopio">
+                <header>
+                    <button name="action_confirmar_salida"
+                            string="Confirmar Salida"
+                            type="object"
+                            class="btn-primary"
+                            invisible="state != 'draft'"
+                            confirm="¿Está seguro de que desea confirmar esta salida? Se crearán los movimientos de inventario y el manifiesto."/>
+                    
+                    <button name="action_view_picking"
+                            string="Ver Transferencia"
+                            type="object"
+                            class="btn-secondary"
+                            invisible="state != 'done'"/>
+                    
+                    <button name="action_view_manifiesto"
+                            string="Ver Manifiesto"
+                            type="object"
+                            class="btn-secondary"
+                            invisible="state != 'done'"/>
+                    
+                    <button name="action_cancelar"
+                            string="Cancelar"
+                            type="object"
+                            invisible="state != 'draft'"
+                            confirm="¿Está seguro de que desea cancelar esta salida?"/>
+                    
+                    <field name="state"
+                           widget="statusbar"
+                           statusbar_visible="draft,done"/>
+                </header>
+                
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_picking"
+                                type="object"
+                                class="oe_stat_button"
+                                icon="fa-truck"
+                                invisible="state != 'done'">
+                            <div class="o_field_widget o_stat_info">
+                                <span class="o_stat_text">Transferencia</span>
+                            </div>
+                        </button>
+                        
+                        <button name="action_view_manifiesto"
+                                type="object"
+                                class="oe_stat_button"
+                                icon="fa-file-text-o"
+                                invisible="state != 'done'">
+                            <div class="o_field_widget o_stat_info">
+                                <span class="o_stat_text">Manifiesto Generado</span>
+                            </div>
+                        </button>
+                    </div>
+
+                    <div class="oe_title">
+                        <h1>
+                            <field name="numero_referencia" readonly="1"/>
+                        </h1>
+                    </div>
+                    
+                    <!-- Información del manifiesto generado -->
+                    <div class="alert alert-success" 
+                         style="margin-bottom: 20px;" 
+                         invisible="state != 'done'">
+                        <strong>✅ Manifiesto Generado:</strong> 
+                        <field name="manifiesto_salida_id" readonly="1"/> 
+                        (SAI como generador)
+                    </div>
+                    
+                    <group string="Información del Transporte" col="4">
+                        <field name="transportista_id" readonly="state != 'draft'" options="{'no_create': True}"/>
+                        <field name="destinatario_id" readonly="state != 'draft'" options="{'no_create': True}"/>
+                        <field name="fecha_salida" readonly="state != 'draft'"/>
+                        <field name="usuario_salida" readonly="1"/>
+                    </group>
+
+                    <group string="Resumen" col="4">
+                        <field name="total_residuos" readonly="1"/>
+                        <field name="cantidad_total" readonly="1"/>
+                        <field name="company_id" groups="base.group_multi_company" readonly="state != 'draft'"/>
+                    </group>
+
+                    <notebook>
+                        <page string="Líneas de Salida">
+                            <field name="linea_ids" readonly="state != 'draft'">
+                                <list editable="bottom">
+                                    <field name="producto_id" options="{'no_create': True}"/>
+                                    <field name="lote_id" domain="[('product_id', '=', producto_id)]" optional="show"/>
+                                    <field name="stock_disponible" readonly="1"/>
+                                    <field name="cantidad"/>
+                                    <field name="clasificaciones_cretib"/>
+                                </list>
+                                <form string="Línea de Salida">
+                                    <group col="2">
+                                        <field name="producto_id" options="{'no_create': True}"/>
+                                        <field name="lote_id" domain="[('product_id', '=', producto_id)]"/>
+                                        <field name="stock_disponible" readonly="1"/>
+                                        <field name="cantidad"/>
+                                        <field name="clasificaciones_cretib" readonly="1"/>
+                                    </group>
+                                </form>
+                            </field>
+                        </page>
+                        
+                        <page string="Observaciones">
+                            <group>
+                                <field name="observaciones" nolabel="1" placeholder="Observaciones adicionales..." readonly="state != 'draft'"/>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Vista de búsqueda para salidas de acopio -->
+    <record id="view_salida_acopio_search" model="ir.ui.view">
+        <field name="name">salida.acopio.search</field>
+        <field name="model">salida.acopio</field>
+        <field name="arch" type="xml">
+            <search string="Buscar Salidas de Acopio">
+                <field name="numero_referencia"/>
+                <field name="transportista_id"/>
+                <field name="destinatario_id"/>
+                <field name="manifiesto_salida_id"/>
+                <field name="usuario_salida"/>
+                
+                <filter string="Borradores" name="draft" domain="[('state','=','draft')]"/>
+                <filter string="Realizadas" name="done" domain="[('state','=','done')]"/>
+                <filter string="Canceladas" name="cancel" domain="[('state','=','cancel')]"/>
+                
+                <filter string="Hoy" name="today" 
+                        domain="[('fecha_salida', '&gt;=', context_today().strftime('%Y-%m-%d'))]"/>
+                <filter string="Esta Semana" name="this_week" 
+                        domain="[('fecha_salida', '&gt;=', (context_today() - datetime.timedelta(days=7)).strftime('%Y-%m-%d'))]"/>
+                <filter string="Este Mes" name="this_month" 
+                        domain="[('fecha_salida', '&gt;=', context_today().strftime('%Y-%m-01'))]"/>
+                
+                <group expand="0" string="Agrupar por">
+                    <filter string="Estado" name="group_state" context="{'group_by':'state'}"/>
+                    <filter string="Transportista" name="group_transportista" context="{'group_by':'transportista_id'}"/>
+                    <filter string="Destinatario" name="group_destinatario" context="{'group_by':'destinatario_id'}"/>
+                    <filter string="Usuario" name="group_user" context="{'group_by':'usuario_salida'}"/>
+                    <filter string="Fecha" name="group_date" context="{'group_by':'fecha_salida:day'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+</odoo>

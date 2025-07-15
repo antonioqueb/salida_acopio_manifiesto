@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <!-- MENÚ RAÍZ INDEPENDIENTE -->
+    <menuitem id="menu_salida_acopio_root"
+              name="Destino Final"
+              sequence="16"
+              web_icon="salida_acopio_manifiesto,static/description/icon.png"/>
+
+    <!-- Submenú principal dentro del menú raíz -->
+    <menuitem id="menu_salida_acopio_main"
+              name="Salidas de Acopio"
+              parent="menu_salida_acopio_root"
+              action="action_salida_acopio"
+              sequence="10"/>
+
+    <!-- Submenú para nueva salida (wizard) -->
+    <menuitem id="menu_salida_acopio_nueva"
+              name="Nueva Salida"
+              parent="menu_salida_acopio_root"
+              action="action_salida_acopio_wizard"
+              sequence="20"/>
+
+    <!-- Acción para solo salidas realizadas -->
+    <record id="action_salida_acopio_realizadas" model="ir.actions.act_window">
+        <field name="name">Salidas Realizadas</field>
+        <field name="res_model">salida.acopio</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_done': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No hay salidas de acopio realizadas
+            </p>
+            <p>
+                Vista filtrada para mostrar solo las salidas de acopio confirmadas.
+            </p>
+        </field>
+    </record>
+
+    <!-- Submenú para salidas realizadas -->
+    <menuitem id="menu_salida_acopio_realizadas"
+              name="Salidas Realizadas"
+              parent="menu_salida_acopio_root"
+              action="action_salida_acopio_realizadas"
+              sequence="30"/>
+
+    <!-- Acción para ver manifiestos de salida -->
+    <record id="action_manifiestos_salida" model="ir.actions.act_window">
+        <field name="name">Manifiestos de Salida (SAI como Generador)</field>
+        <field name="res_model">manifiesto.ambiental</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('generador_nombre', 'ilike', 'SAI')]</field>
+        <field name="context">{'search_default_confirmed': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No hay manifiestos de salida generados
+            </p>
+            <p>
+                Manifiestos donde SAI aparece como generador, creados automáticamente
+                desde las salidas de acopio.
+            </p>
+        </field>
+    </record>
+
+    <!-- Submenú para manifiestos de salida -->
+    <menuitem id="menu_manifiestos_salida"
+              name="Manifiestos de Salida"
+              parent="menu_salida_acopio_root"
+              action="action_manifiestos_salida"
+              sequence="40"/>
+</odoo>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Secuencia para salida de acopio -->
+    <record id="seq_salida_acopio" model="ir.sequence">
+        <field name="name">Salida de Acopio</field>
+        <field name="code">salida.acopio</field>
+        <field name="prefix">SAI-</field>
+        <field name="padding">6</field>
+        <field name="company_id" eval="False"/>
+    </record>
+</odoo>
