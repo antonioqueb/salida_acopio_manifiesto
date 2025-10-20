@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Secuencia para salida de acopio -->
+    <!-- Secuencia para salida de acopio con fecha -->
     <record id="seq_salida_acopio" model="ir.sequence">
         <field name="name">Salida de Acopio</field>
         <field name="code">salida.acopio</field>
-        <field name="prefix">SAI-</field>
-        <field name="padding">6</field>
+        <field name="prefix">SAI-%(day)s%(month)s%(year)s-</field>
+        <field name="padding">1</field>
+        <field name="use_date_range">True</field>
         <field name="company_id" eval="False"/>
     </record>
+
 </odoo>
