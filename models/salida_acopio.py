@@ -309,7 +309,7 @@ class SalidaAcopio(models.Model):
         """
         _logger.info("=== INICIO CREACIÓN MANIFIESTO DE SALIDA ===")
         
-        # 🔥 CREAR O OBTENER PARTNER SAI
+        # 🔥 CREAR O OBTENER PARTNER SAI ..
         sai_partner = self._get_or_create_sai_partner()
         
         # Crear el manifiesto con SAI como generador
