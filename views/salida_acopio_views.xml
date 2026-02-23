@@ -202,13 +202,11 @@
                 <filter string="Este Mes" name="this_month" 
                         domain="[('fecha_salida', '&gt;=', context_today().strftime('%Y-%m-01'))]"/>
                 
-                <group expand="0" string="Agrupar por">
                     <filter string="Estado" name="group_state" context="{'group_by':'state'}"/>
                     <filter string="Transportista" name="group_transportista" context="{'group_by':'transportista_id'}"/>
                     <filter string="Destinatario" name="group_destinatario" context="{'group_by':'destinatario_id'}"/>
                     <filter string="Usuario" name="group_user" context="{'group_by':'usuario_salida'}"/>
                     <filter string="Fecha" name="group_date" context="{'group_by':'fecha_salida:day'}"/>
-                </group>
             </search>
         </field>
     </record>
