@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo>
-    <!-- Acción principal para salida de acopio -->
     <record id="action_salida_acopio" model="ir.actions.act_window">
         <field name="name">Salidas de Acopio</field>
         <field name="res_model">salida.acopio</field>
@@ -16,7 +15,6 @@
         </field>
     </record>
 
-    <!-- Acción para abrir wizard de nueva salida -->
     <record id="action_salida_acopio_wizard" model="ir.actions.act_window">
         <field name="name">Nueva Salida de Acopio</field>
         <field name="res_model">salida.acopio.wizard</field>
@@ -24,9 +22,7 @@
         <field name="target">new</field>
     </record>
 
-    <!-- Vista de lista para salida de acopio -->
-    <!-- ✅ v19: eliminado bloque <header> dentro de <list> (descontinuado en v19) -->
-    <!-- ✅ v19: widget="badge" en campo state -->
+    <!-- ✅ v19: sin <header> dentro de <list>, widget="badge" en state -->
     <record id="view_salida_acopio_list" model="ir.ui.view">
         <field name="name">salida.acopio.list</field>
         <field name="model">salida.acopio</field>
@@ -44,21 +40,20 @@
                        widget="badge"
                        decoration-success="state == 'done'"
                        decoration-muted="state == 'cancel'"/>
-                <button name="action_view_picking" 
-                        type="object" 
-                        string="Ver Transferencia" 
+                <button name="action_view_picking"
+                        type="object"
+                        string="Ver Transferencia"
                         class="btn-link"
                         invisible="state != 'done'"/>
-                <button name="action_view_manifiesto" 
-                        type="object" 
-                        string="Ver Manifiesto" 
+                <button name="action_view_manifiesto"
+                        type="object"
+                        string="Ver Manifiesto"
                         class="btn-link"
                         invisible="state != 'done'"/>
             </list>
         </field>
     </record>
 
-    <!-- Vista de formulario para salida de acopio -->
     <record id="view_salida_acopio_form" model="ir.ui.view">
         <field name="name">salida.acopio.form</field>
         <field name="model">salida.acopio</field>
@@ -71,30 +66,26 @@
                             class="btn-primary"
                             invisible="state != 'draft'"
                             confirm="¿Está seguro de que desea confirmar esta salida? Se crearán los movimientos de inventario y el manifiesto."/>
-                    
                     <button name="action_view_picking"
                             string="Ver Transferencia"
                             type="object"
                             class="btn-secondary"
                             invisible="state != 'done'"/>
-                    
                     <button name="action_view_manifiesto"
                             string="Ver Manifiesto"
                             type="object"
                             class="btn-secondary"
                             invisible="state != 'done'"/>
-                    
                     <button name="action_cancelar"
                             string="Cancelar"
                             type="object"
                             invisible="state != 'draft'"
                             confirm="¿Está seguro de que desea cancelar esta salida?"/>
-                    
                     <field name="state"
                            widget="statusbar"
                            statusbar_visible="draft,done"/>
                 </header>
-                
+
                 <sheet>
                     <div class="oe_button_box" name="button_box">
                         <button name="action_view_picking"
@@ -106,7 +97,6 @@
                                 <span class="o_stat_text">Transferencia</span>
                             </div>
                         </button>
-                        
                         <button name="action_view_manifiesto"
                                 type="object"
                                 class="oe_stat_button"
@@ -123,16 +113,15 @@
                             <field name="numero_referencia" readonly="1"/>
                         </h1>
                     </div>
-                    
-                    <!-- Información del manifiesto generado -->
-                    <div class="alert alert-success" 
-                         style="margin-bottom: 20px;" 
+
+                    <div class="alert alert-success"
+                         style="margin-bottom: 20px;"
                          invisible="state != 'done'">
-                        <strong>✅ Manifiesto Generado:</strong> 
-                        <field name="manifiesto_salida_id" readonly="1"/> 
+                        <strong>✅ Manifiesto Generado:</strong>
+                        <field name="manifiesto_salida_id" readonly="1"/>
                         (SAI como generador)
                     </div>
-                    
+
                     <group string="Información del Transporte" col="4">
                         <field name="transportista_id" readonly="state != 'draft'" options="{'no_create': True}"/>
                         <field name="destinatario_id" readonly="state != 'draft'" options="{'no_create': True}"/>
@@ -149,17 +138,24 @@
                     <notebook>
                         <page string="Líneas de Salida">
                             <field name="linea_ids" readonly="state != 'draft'">
+                                <!-- ✅ domain dinámico usando lotes_disponibles_ids -->
                                 <list editable="bottom">
                                     <field name="producto_id" options="{'no_create': True}"/>
-                                    <field name="lote_id" domain="[('product_id', '=', producto_id)]" optional="show"/>
+                                    <field name="lotes_disponibles_ids" column_invisible="1"/>
+                                    <field name="lote_id"
+                                           domain="[('id', 'in', lotes_disponibles_ids)]"
+                                           options="{'no_create': True}"/>
                                     <field name="stock_disponible" readonly="1"/>
                                     <field name="cantidad"/>
-                                    <field name="clasificaciones_cretib"/>
+                                    <field name="clasificaciones_cretib" readonly="1"/>
                                 </list>
                                 <form string="Línea de Salida">
                                     <group col="2">
                                         <field name="producto_id" options="{'no_create': True}"/>
-                                        <field name="lote_id" domain="[('product_id', '=', producto_id)]"/>
+                                        <field name="lotes_disponibles_ids" invisible="1"/>
+                                        <field name="lote_id"
+                                               domain="[('id', 'in', lotes_disponibles_ids)]"
+                                               options="{'no_create': True}"/>
                                         <field name="stock_disponible" readonly="1"/>
                                         <field name="cantidad"/>
                                         <field name="clasificaciones_cretib" readonly="1"/>
@@ -167,10 +163,12 @@
                                 </form>
                             </field>
                         </page>
-                        
+
                         <page string="Observaciones">
                             <group>
-                                <field name="observaciones" nolabel="1" placeholder="Observaciones adicionales..." readonly="state != 'draft'"/>
+                                <field name="observaciones" nolabel="1"
+                                       placeholder="Observaciones adicionales..."
+                                       readonly="state != 'draft'"/>
                             </group>
                         </page>
                     </notebook>
@@ -179,7 +177,6 @@
         </field>
     </record>
 
-    <!-- Vista de búsqueda para salidas de acopio -->
     <record id="view_salida_acopio_search" model="ir.ui.view">
         <field name="name">salida.acopio.search</field>
         <field name="model">salida.acopio</field>
@@ -190,18 +187,15 @@
                 <field name="destinatario_id"/>
                 <field name="manifiesto_salida_id"/>
                 <field name="usuario_salida"/>
-                
                 <filter string="Borradores" name="draft" domain="[('state','=','draft')]"/>
                 <filter string="Realizadas" name="done" domain="[('state','=','done')]"/>
                 <filter string="Canceladas" name="cancel" domain="[('state','=','cancel')]"/>
-                
-                <filter string="Hoy" name="today" 
+                <filter string="Hoy" name="today"
                         domain="[('fecha_salida', '&gt;=', context_today().strftime('%Y-%m-%d'))]"/>
-                <filter string="Esta Semana" name="this_week" 
+                <filter string="Esta Semana" name="this_week"
                         domain="[('fecha_salida', '&gt;=', (context_today() - datetime.timedelta(days=7)).strftime('%Y-%m-%d'))]"/>
-                <filter string="Este Mes" name="this_month" 
+                <filter string="Este Mes" name="this_month"
                         domain="[('fecha_salida', '&gt;=', context_today().strftime('%Y-%m-01'))]"/>
-                
                     <filter string="Estado" name="group_state" context="{'group_by':'state'}"/>
                     <filter string="Transportista" name="group_transportista" context="{'group_by':'transportista_id'}"/>
                     <filter string="Destinatario" name="group_destinatario" context="{'group_by':'destinatario_id'}"/>
