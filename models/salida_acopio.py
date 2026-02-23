@@ -180,7 +180,6 @@ class SalidaAcopio(models.Model):
         })
         for linea in self.linea_ids:
             move = self.env['stock.move'].create({
-                'name': f"Salida Acopio: {linea.producto_id.name}",
                 'product_id': linea.producto_id.id,
                 'product_uom_qty': linea.cantidad,
                 'product_uom': linea.producto_id.uom_id.id,
@@ -188,6 +187,7 @@ class SalidaAcopio(models.Model):
                 'location_id': location_acopio.id,
                 'location_dest_id': location_customer.id,
                 'company_id': self.company_id.id,
+                'description_picking': f"Salida Acopio: {linea.producto_id.name}",
             })
             if linea.lote_id:
                 self.env['stock.move.line'].create({
