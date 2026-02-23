@@ -22,7 +22,6 @@
         <field name="target">new</field>
     </record>
 
-    <!-- ✅ v19: sin <header> dentro de <list>, widget="badge" en state -->
     <record id="view_salida_acopio_list" model="ir.ui.view">
         <field name="name">salida.acopio.list</field>
         <field name="model">salida.acopio</field>
@@ -65,7 +64,7 @@
                             type="object"
                             class="btn-primary"
                             invisible="state != 'draft'"
-                            confirm="¿Está seguro de que desea confirmar esta salida? Se crearán los movimientos de inventario y el manifiesto."/>
+                            confirm="¿Está seguro de confirmar esta salida? Se crearán movimientos de inventario y el manifiesto."/>
                     <button name="action_view_picking"
                             string="Ver Transferencia"
                             type="object"
@@ -80,10 +79,8 @@
                             string="Cancelar"
                             type="object"
                             invisible="state != 'draft'"
-                            confirm="¿Está seguro de que desea cancelar esta salida?"/>
-                    <field name="state"
-                           widget="statusbar"
-                           statusbar_visible="draft,done"/>
+                            confirm="¿Está seguro de cancelar esta salida?"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,done"/>
                 </header>
 
                 <sheet>
@@ -109,9 +106,7 @@
                     </div>
 
                     <div class="oe_title">
-                        <h1>
-                            <field name="numero_referencia" readonly="1"/>
-                        </h1>
+                        <h1><field name="numero_referencia" readonly="1"/></h1>
                     </div>
 
                     <div class="alert alert-success"
@@ -138,12 +133,12 @@
                     <notebook>
                         <page string="Líneas de Salida">
                             <field name="linea_ids" readonly="state != 'draft'">
-                                <!-- ✅ domain dinámico usando lotes_disponibles_ids -->
                                 <list editable="bottom">
                                     <field name="producto_id" options="{'no_create': True}"/>
-                                    <field name="lotes_disponibles_ids" column_invisible="1"/>
+                                    <!-- ✅ lote_domain_ids invisible expone los IDs al cliente para el domain -->
+                                    <field name="lote_domain_ids" column_invisible="1"/>
                                     <field name="lote_id"
-                                           domain="[('id', 'in', lotes_disponibles_ids)]"
+                                           domain="[('id', 'in', lote_domain_ids)]"
                                            options="{'no_create': True}"/>
                                     <field name="stock_disponible" readonly="1"/>
                                     <field name="cantidad"/>
@@ -152,9 +147,9 @@
                                 <form string="Línea de Salida">
                                     <group col="2">
                                         <field name="producto_id" options="{'no_create': True}"/>
-                                        <field name="lotes_disponibles_ids" invisible="1"/>
+                                        <field name="lote_domain_ids" invisible="1"/>
                                         <field name="lote_id"
-                                               domain="[('id', 'in', lotes_disponibles_ids)]"
+                                               domain="[('id', 'in', lote_domain_ids)]"
                                                options="{'no_create': True}"/>
                                         <field name="stock_disponible" readonly="1"/>
                                         <field name="cantidad"/>

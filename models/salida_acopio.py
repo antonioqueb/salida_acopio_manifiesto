@@ -45,7 +45,6 @@ class SalidaAcopio(models.Model):
         string='Transportista',
         domain=[('is_company', '=', True)],
         required=True,
-        help='Empresa transportista que llevará los residuos (SAI por defecto)'
     )
 
     destinatario_id = fields.Many2one(
@@ -53,7 +52,6 @@ class SalidaAcopio(models.Model):
         string='Destinatario Final',
         domain=[('is_company', '=', True)],
         required=True,
-        help='Empresa destinataria final de los residuos'
     )
 
     state = fields.Selection([
@@ -66,7 +64,6 @@ class SalidaAcopio(models.Model):
         'stock.picking',
         string='Transferencia de Inventario',
         readonly=True,
-        help='Transferencia de inventario generada para esta salida'
     )
 
     linea_ids = fields.One2many(
@@ -87,9 +84,7 @@ class SalidaAcopio(models.Model):
         store=True
     )
 
-    observaciones = fields.Text(
-        string='Observaciones'
-    )
+    observaciones = fields.Text(string='Observaciones')
 
     company_id = fields.Many2one(
         'res.company',
@@ -97,7 +92,6 @@ class SalidaAcopio(models.Model):
         default=lambda self: self.env.company
     )
 
-    # ✅ v19: @api.model_create_multi
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
@@ -110,11 +104,9 @@ class SalidaAcopio(models.Model):
                     fecha_local = fields.Datetime.context_timestamp(self, fecha_utc)
                 else:
                     fecha_local = fields.Datetime.context_timestamp(self, fields.Datetime.now())
-
                 vals['numero_referencia'] = self.env['ir.sequence'].with_context(
                     ir_sequence_date=fecha_local.date()
                 ).next_by_code('salida.acopio') or '/'
-
         return super().create(vals_list)
 
     @api.depends('linea_ids.cantidad')
@@ -134,7 +126,6 @@ class SalidaAcopio(models.Model):
 
     def action_confirmar_salida(self):
         self.ensure_one()
-
         if self.state != 'draft':
             raise UserError("Solo se pueden confirmar salidas en estado borrador.")
         if not self.linea_ids:
@@ -143,54 +134,40 @@ class SalidaAcopio(models.Model):
             raise UserError("Debe seleccionar un transportista.")
         if not self.destinatario_id:
             raise UserError("Debe seleccionar un destinatario final.")
-
         for linea in self.linea_ids:
             if linea.cantidad > linea.stock_disponible:
                 raise UserError(
                     f"No hay suficiente stock para el producto {linea.producto_id.name}. "
                     f"Solicitado: {linea.cantidad} kg, Disponible: {linea.stock_disponible} kg"
                 )
-
         try:
             picking = self._create_stock_picking()
             manifiesto = self._create_manifiesto_salida()
-
-            self.write({
-                'state': 'done',
-                'picking_id': picking.id,
-                'manifiesto_salida_id': manifiesto.id
-            })
-
+            self.write({'state': 'done', 'picking_id': picking.id, 'manifiesto_salida_id': manifiesto.id})
             _logger.info(f"Salida de acopio {self.numero_referencia} confirmada exitosamente")
-
             return {
                 'type': 'ir.actions.client',
                 'tag': 'display_notification',
                 'params': {
                     'title': 'Salida Realizada',
-                    'message': f'La salida de acopio {self.numero_referencia} se ha realizado exitosamente. '
-                               f'Manifiesto generado: {manifiesto.numero_manifiesto}',
+                    'message': f'La salida {self.numero_referencia} se realizó. Manifiesto: {manifiesto.numero_manifiesto}',
                     'type': 'success',
                     'sticky': False,
                 }
             }
-
         except Exception as e:
-            _logger.error(f"Error al confirmar salida de acopio {self.numero_referencia}: {str(e)}")
+            _logger.error(f"Error al confirmar salida {self.numero_referencia}: {str(e)}")
             raise UserError(f"Error al realizar la salida: {str(e)}")
 
     def _create_stock_picking(self):
         location_acopio = self._get_location_acopio()
         location_customer = self.env.ref('stock.stock_location_customers')
-
         picking_type = self.env['stock.picking.type'].search([
             ('code', '=', 'outgoing'),
             ('warehouse_id.company_id', '=', self.company_id.id)
         ], limit=1)
-
         if not picking_type:
             raise UserError("No se encontró un tipo de operación de salida configurado.")
-
         picking = self.env['stock.picking'].create({
             'picking_type_id': picking_type.id,
             'location_id': location_acopio.id,
@@ -201,7 +178,6 @@ class SalidaAcopio(models.Model):
             'partner_id': self.destinatario_id.id,
             'salida_acopio_id': self.id,
         })
-
         for linea in self.linea_ids:
             move = self.env['stock.move'].create({
                 'name': f"Salida Acopio: {linea.producto_id.name}",
@@ -213,7 +189,6 @@ class SalidaAcopio(models.Model):
                 'location_dest_id': location_customer.id,
                 'company_id': self.company_id.id,
             })
-
             if linea.lote_id:
                 self.env['stock.move.line'].create({
                     'move_id': move.id,
@@ -224,19 +199,15 @@ class SalidaAcopio(models.Model):
                     'location_id': location_acopio.id,
                     'location_dest_id': location_customer.id,
                 })
-
         picking.action_confirm()
         picking.action_assign()
-
         can_validate = all(
             move.move_line_ids
             for move in picking.move_ids
             if move.product_id.tracking in ('lot', 'serial')
         )
-
         if can_validate:
             picking.button_validate()
-
         return picking
 
     def _get_or_create_sai_partner(self):
@@ -245,9 +216,8 @@ class SalidaAcopio(models.Model):
             ('is_company', '=', True),
             ('es_generador', '=', True)
         ], limit=1)
-
         if not sai_partner:
-            sai_vals = {
+            sai_partner = self.env['res.partner'].create({
                 'name': self.company_id.name or 'SAI',
                 'is_company': True,
                 'es_generador': True,
@@ -259,17 +229,13 @@ class SalidaAcopio(models.Model):
                 'zip': self.company_id.zip or '',
                 'phone': self.company_id.phone or '',
                 'email': self.company_id.email or '',
-            }
-            sai_partner = self.env['res.partner'].create(sai_vals)
+            })
             _logger.info(f"Partner SAI creado: {sai_partner.name}")
-
         return sai_partner
 
     def _create_manifiesto_salida(self):
         _logger.info("=== INICIO CREACIÓN MANIFIESTO DE SALIDA ===")
-
         sai_partner = self._get_or_create_sai_partner()
-
         manifiesto_vals = {
             'numero_manifiesto': self.numero_referencia,
             'es_manifiesto_salida': True,
@@ -309,17 +275,10 @@ class SalidaAcopio(models.Model):
             'state': 'confirmed',
             'company_id': self.company_id.id,
         }
-
-        _logger.info(f"🔥 CREANDO MANIFIESTO CON PARTNER SAI: {sai_partner.name}")
-        _logger.info(f"🔥 USANDO FOLIO DE SALIDA: {self.numero_referencia}")
-
         manifiesto = self.env['manifiesto.ambiental'].create(manifiesto_vals)
-
-        _logger.info(f"✅ Manifiesto creado con ID: {manifiesto.id}")
-        _logger.info(f"✅ Número del manifiesto después de crear: {manifiesto.numero_manifiesto}")
-
+        _logger.info(f"✅ Manifiesto creado: {manifiesto.numero_manifiesto}")
         for linea in self.linea_ids:
-            residuo_vals = {
+            residuo = self.env['manifiesto.ambiental.residuo'].create({
                 'manifiesto_id': manifiesto.id,
                 'product_id': linea.producto_id.id,
                 'nombre_residuo': linea.producto_id.name,
@@ -334,15 +293,10 @@ class SalidaAcopio(models.Model):
                 'envase_capacidad': getattr(linea.producto_id, 'envase_capacidad_default', 0),
                 'etiqueta_si': True,
                 'etiqueta_no': False,
-            }
-
-            residuo = self.env['manifiesto.ambiental.residuo'].create(residuo_vals)
-
+            })
             if linea.lote_id:
                 residuo.lot_id_referencial = linea.lote_id.name
-                _logger.info(f"✅ Lote referencial asignado: {linea.lote_id.name}")
-
-        _logger.info(f"🎉 === FIN CREACIÓN MANIFIESTO: {manifiesto.numero_manifiesto} ===")
+        _logger.info(f"🎉 FIN CREACIÓN MANIFIESTO: {manifiesto.numero_manifiesto}")
         return manifiesto
 
     def _get_location_acopio(self):
@@ -350,10 +304,8 @@ class SalidaAcopio(models.Model):
             ('name', '=', 'Acopio'),
             ('company_id', '=', self.company_id.id)
         ], limit=1)
-
         if not location_acopio:
-            raise UserError("No se encontró la ubicación 'Acopio'. Debe existir para poder realizar salidas.")
-
+            raise UserError("No se encontró la ubicación 'Acopio'.")
         return location_acopio
 
     def action_cancelar(self):
@@ -394,42 +346,37 @@ class SalidaAcopioLinea(models.Model):
     _description = 'Línea de Salida de Acopio'
 
     salida_id = fields.Many2one(
-        'salida.acopio',
-        string='Salida de Acopio',
-        required=True,
-        ondelete='cascade'
+        'salida.acopio', string='Salida de Acopio',
+        required=True, ondelete='cascade'
     )
 
     producto_id = fields.Many2one(
-        'product.product',
-        string='Producto/Residuo',
-        required=True,
-        help='Producto disponible en la ubicación Acopio'
-    )
-
-    # ✅ NUEVO: lotes filtrados por producto + stock en Acopio
-    lotes_disponibles_ids = fields.Many2many(
-        'stock.lot',
-        compute='_compute_lotes_disponibles',
-        string='Lotes Disponibles',
+        'product.product', string='Producto/Residuo', required=True,
     )
 
     lote_id = fields.Many2one(
+        'stock.lot', string='Lote',
+    )
+
+    # ✅ Campo Char que almacena los IDs de lotes disponibles como string "1,2,3"
+    # Se usa en el domain de la vista: [('id', 'in', lote_domain_ids)]
+    lote_domain_ids = fields.Many2many(
         'stock.lot',
-        string='Lote',
-        help='Lote específico del producto (requerido si el producto tiene seguimiento por lotes)'
+        'salida_acopio_linea_lote_domain_rel',
+        'linea_id', 'lot_id',
+        string='Lotes en Acopio',
+        compute='_compute_lote_domain_ids',
+        store=True,
     )
 
     cantidad = fields.Float(
-        string='Cantidad (kg)',
-        required=True,
-        digits=(12, 3)
+        string='Cantidad (kg)', required=True, digits=(12, 3)
     )
 
     stock_disponible = fields.Float(
         string='Stock Disponible',
         compute='_compute_stock_disponible',
-        help='Cantidad disponible en la ubicación Acopio'
+        store=True,
     )
 
     clasificaciones_cretib = fields.Char(
@@ -445,45 +392,50 @@ class SalidaAcopioLinea(models.Model):
         ], limit=1)
 
     @api.depends('producto_id')
-    def _compute_lotes_disponibles(self):
-        """Lotes con stock positivo en Acopio para el producto seleccionado."""
+    def _compute_lote_domain_ids(self):
+        """
+        Calcula los lotes disponibles en Acopio para el producto.
+        store=True para que el domain de la vista funcione correctamente.
+        """
         for record in self:
-            if record.producto_id:
-                location_acopio = record._get_location_acopio()
-                if location_acopio:
-                    quants = self.env['stock.quant'].search([
-                        ('product_id', '=', record.producto_id.id),
-                        ('location_id', '=', location_acopio.id),
-                        ('quantity', '>', 0),
-                        ('lot_id', '!=', False),
-                    ])
-                    record.lotes_disponibles_ids = [(6, 0, quants.mapped('lot_id').ids)]
-                else:
-                    record.lotes_disponibles_ids = [(6, 0, [])]
-            else:
-                record.lotes_disponibles_ids = [(6, 0, [])]
+            if not record.producto_id:
+                record.lote_domain_ids = [(5, 0, 0)]
+                continue
+            location_acopio = record._get_location_acopio()
+            if not location_acopio:
+                record.lote_domain_ids = [(5, 0, 0)]
+                continue
+            quants = self.env['stock.quant'].search([
+                ('product_id', '=', record.producto_id.id),
+                ('location_id', '=', location_acopio.id),
+                ('quantity', '>', 0),
+                ('lot_id', '!=', False),
+            ])
+            lot_ids = quants.mapped('lot_id').ids
+            _logger.info(f"Lotes en Acopio para {record.producto_id.name}: {lot_ids}")
+            record.lote_domain_ids = [(6, 0, lot_ids)]
 
     @api.depends('producto_id', 'lote_id')
     def _compute_stock_disponible(self):
         for record in self:
-            if record.producto_id:
-                try:
-                    location_acopio = record._get_location_acopio()
-                    if location_acopio:
-                        domain = [
-                            ('product_id', '=', record.producto_id.id),
-                            ('location_id', '=', location_acopio.id),
-                            ('quantity', '>', 0)
-                        ]
-                        if record.lote_id:
-                            domain.append(('lot_id', '=', record.lote_id.id))
-                        quants = self.env['stock.quant'].search(domain)
-                        record.stock_disponible = sum(quants.mapped('quantity'))
-                    else:
-                        record.stock_disponible = 0.0
-                except Exception:
+            if not record.producto_id:
+                record.stock_disponible = 0.0
+                continue
+            try:
+                location_acopio = record._get_location_acopio()
+                if not location_acopio:
                     record.stock_disponible = 0.0
-            else:
+                    continue
+                domain = [
+                    ('product_id', '=', record.producto_id.id),
+                    ('location_id', '=', location_acopio.id),
+                    ('quantity', '>', 0),
+                ]
+                if record.lote_id:
+                    domain.append(('lot_id', '=', record.lote_id.id))
+                quants = self.env['stock.quant'].search(domain)
+                record.stock_disponible = sum(quants.mapped('quantity'))
+            except Exception:
                 record.stock_disponible = 0.0
 
     @api.depends('producto_id')
@@ -496,41 +448,44 @@ class SalidaAcopioLinea(models.Model):
 
     @api.onchange('producto_id')
     def _onchange_producto_id(self):
-        """Al cambiar producto: limpiar lote/cantidad y actualizar domain."""
         self.lote_id = False
         self.cantidad = 0.0
+        # Recomputar lotes disponibles para tener IDs actualizados en el domain
+        self._compute_lote_domain_ids()
         return {
             'domain': {
-                'lote_id': [('id', 'in', self.lotes_disponibles_ids.ids)]
+                'lote_id': [('id', 'in', self.lote_domain_ids.ids)]
             }
         }
 
     @api.onchange('lote_id')
     def _onchange_lote_id(self):
-        """Al seleccionar lote: llenar stock_disponible y sugerir cantidad."""
-        if self.lote_id and self.producto_id:
-            location_acopio = self._get_location_acopio()
-            if location_acopio:
-                quants = self.env['stock.quant'].search([
-                    ('product_id', '=', self.producto_id.id),
-                    ('location_id', '=', location_acopio.id),
-                    ('lot_id', '=', self.lote_id.id),
-                    ('quantity', '>', 0),
-                ])
-                # Escribir directamente stock_disponible para que se refleje en UI
-                self.stock_disponible = sum(quants.mapped('quantity'))
-                if self.stock_disponible > 0:
-                    self.cantidad = self.stock_disponible
-        elif not self.lote_id:
-            self.stock_disponible = 0.0
-            self.cantidad = 0.0
+        """Al seleccionar lote: mostrar stock y sugerir cantidad."""
+        if not self.lote_id or not self.producto_id:
+            if not self.lote_id:
+                self.cantidad = 0.0
+            return
+        location_acopio = self._get_location_acopio()
+        if not location_acopio:
+            return
+        quants = self.env['stock.quant'].search([
+            ('product_id', '=', self.producto_id.id),
+            ('location_id', '=', location_acopio.id),
+            ('lot_id', '=', self.lote_id.id),
+            ('quantity', '>', 0),
+        ])
+        disponible = sum(quants.mapped('quantity'))
+        # Forzar escritura directa del campo computed para que aparezca en UI
+        self.stock_disponible = disponible
+        if disponible > 0:
+            self.cantidad = disponible
 
     @api.constrains('cantidad', 'stock_disponible')
     def _check_cantidad_disponible(self):
         for record in self:
             if record.cantidad > 0 and record.cantidad > record.stock_disponible:
                 raise UserError(
-                    f"La cantidad a dar de salida ({record.cantidad} kg) no puede ser mayor "
-                    f"al stock disponible ({record.stock_disponible} kg) para el producto "
-                    f"{record.producto_id.name}"
+                    f"La cantidad ({record.cantidad} kg) no puede ser mayor "
+                    f"al stock disponible ({record.stock_disponible} kg) "
+                    f"para {record.producto_id.name}"
                 )
