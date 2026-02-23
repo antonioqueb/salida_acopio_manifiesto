@@ -17,7 +17,7 @@ class SalidaAcopio(models.Model):
         required=True,
         copy=False,
         readonly=True,
-        default='/'  # ✅ CORREGIDO: Iniciar con '/' para generar en create()
+        default='/'
     )
 
     # Datos del manifiesto generado
@@ -99,28 +99,28 @@ class SalidaAcopio(models.Model):
         default=lambda self: self.env.company
     )
 
-    @api.model
-    def create(self, vals):
-        """✅ CORREGIDO: Generar secuencia con fecha local del usuario"""
-        if vals.get('numero_referencia', '/') == '/':
-            # Obtener fecha de salida o usar fecha actual
-            if vals.get('fecha_salida'):
-                if isinstance(vals['fecha_salida'], str):
-                    fecha_utc = fields.Datetime.from_string(vals['fecha_salida'])
+    # ✅ v19: @api.model_create_multi en lugar de @api.model
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            if vals.get('numero_referencia', '/') == '/':
+                # Obtener fecha de salida o usar fecha actual
+                if vals.get('fecha_salida'):
+                    if isinstance(vals['fecha_salida'], str):
+                        fecha_utc = fields.Datetime.from_string(vals['fecha_salida'])
+                    else:
+                        fecha_utc = vals['fecha_salida']
+                    # Convertir a timezone local
+                    fecha_local = fields.Datetime.context_timestamp(self, fecha_utc)
                 else:
-                    fecha_utc = vals['fecha_salida']
-                # Convertir a timezone local
-                fecha_local = fields.Datetime.context_timestamp(self, fecha_utc)
-            else:
-                # ✅ Usar fecha/hora actual en timezone del usuario
-                fecha_local = fields.Datetime.context_timestamp(self, fields.Datetime.now())
-            
-            # Generar secuencia con la fecha local
-            vals['numero_referencia'] = self.env['ir.sequence'].with_context(
-                ir_sequence_date=fecha_local.date()
-            ).next_by_code('salida.acopio') or '/'
-        
-        return super(SalidaAcopio, self).create(vals)
+                    fecha_local = fields.Datetime.context_timestamp(self, fields.Datetime.now())
+
+                # Generar secuencia con la fecha local
+                vals['numero_referencia'] = self.env['ir.sequence'].with_context(
+                    ir_sequence_date=fecha_local.date()
+                ).next_by_code('salida.acopio') or '/'
+
+        return super().create(vals_list)
 
     @api.depends('linea_ids.cantidad')
     def _compute_totales(self):
@@ -256,14 +256,12 @@ class SalidaAcopio(models.Model):
         picking.action_confirm()
         picking.action_assign()
 
-        # MEJORADO: Validar automáticamente solo si NO hay lotes o todos los lotes están asignados
-        can_validate = True
-        for move in picking.move_ids:
-            if move.product_id.tracking in ['lot', 'serial']:
-                # Si el producto requiere lotes, verificar que tenga move_lines
-                if not move.move_line_ids:
-                    can_validate = False
-                    break
+        # ✅ v19: lógica simplificada con all()
+        can_validate = all(
+            move.move_line_ids
+            for move in picking.move_ids
+            if move.product_id.tracking in ('lot', 'serial')
+        )
 
         if can_validate:
             picking.button_validate()
@@ -301,29 +299,28 @@ class SalidaAcopio(models.Model):
 
         return sai_partner
 
-    
     def _create_manifiesto_salida(self):
         """
         Crea el manifiesto ambiental donde SAI es el generador
         ✅ USANDO EL MISMO FOLIO que la salida de acopio
         """
         _logger.info("=== INICIO CREACIÓN MANIFIESTO DE SALIDA ===")
-        
-        # 🔥 CREAR O OBTENER PARTNER SAI ..
+
+        # 🔥 CREAR O OBTENER PARTNER SAI
         sai_partner = self._get_or_create_sai_partner()
-        
+
         # Crear el manifiesto con SAI como generador
         manifiesto_vals = {
             # ✅ USAR EL MISMO NÚMERO DE REFERENCIA QUE LA SALIDA
             'numero_manifiesto': self.numero_referencia,
-            
+
             # 🔥 NUEVO: Marcar explícitamente como manifiesto de salida
             'es_manifiesto_salida': True,
-            
+
             # ✅ USAR EL PARTNER DE SAI - ESTO PERMITIRÁ LA GENERACIÓN AUTOMÁTICA
             'generador_id': sai_partner.id,
             'generador_fecha': self.fecha_salida.date() if self.fecha_salida else fields.Date.context_today(self),
-            
+
             # Datos del transportista
             'transportista_id': self.transportista_id.id,
             'transportista_nombre': self.transportista_id.name,
@@ -342,7 +339,7 @@ class SalidaAcopio(models.Model):
             'numero_placa': getattr(self.transportista_id, 'numero_placa', '') or '',
             'transportista_responsable_nombre': '',
             'transportista_fecha': self.fecha_salida.date() if self.fecha_salida else fields.Date.context_today(self),
-            
+
             # Datos del destinatario
             'destinatario_id': self.destinatario_id.id,
             'destinatario_nombre': self.destinatario_id.name,
@@ -357,23 +354,23 @@ class SalidaAcopio(models.Model):
             'destinatario_email': self.destinatario_id.email or '',
             'numero_autorizacion_semarnat_destinatario': getattr(self.destinatario_id, 'numero_autorizacion_semarnat', '') or '',
             'destinatario_fecha': self.fecha_salida.date() if self.fecha_salida else fields.Date.context_today(self),
-            
+
             # Información adicional
             'instrucciones_especiales': self.observaciones or '',
             'state': 'confirmed',
             'company_id': self.company_id.id,
         }
-        
+
         _logger.info(f"🔥 CREANDO MANIFIESTO CON PARTNER SAI: {sai_partner.name}")
         _logger.info(f"🔥 USANDO FOLIO DE SALIDA: {self.numero_referencia}")
         _logger.info(f"Valores del manifiesto: {manifiesto_vals}")
-        
+
         manifiesto = self.env['manifiesto.ambiental'].create(manifiesto_vals)
-        
+
         # VERIFICACIÓN POSTERIOR A CREAR
         _logger.info(f"✅ Manifiesto creado con ID: {manifiesto.id}")
         _logger.info(f"✅ Número del manifiesto después de crear: {manifiesto.numero_manifiesto}")
-        
+
         # Crear residuos en el manifiesto basados en las líneas de salida
         for linea in self.linea_ids:
             residuo_vals = {
@@ -381,7 +378,7 @@ class SalidaAcopio(models.Model):
                 'product_id': linea.producto_id.id,
                 'nombre_residuo': linea.producto_id.name,
                 'cantidad': linea.cantidad,
-                
+
                 # Copiar clasificaciones CRETIB del producto si existen
                 'clasificacion_corrosivo': getattr(linea.producto_id, 'clasificacion_corrosivo', False),
                 'clasificacion_reactivo': getattr(linea.producto_id, 'clasificacion_reactivo', False),
@@ -389,21 +386,21 @@ class SalidaAcopio(models.Model):
                 'clasificacion_toxico': getattr(linea.producto_id, 'clasificacion_toxico', False),
                 'clasificacion_inflamable': getattr(linea.producto_id, 'clasificacion_inflamable', False),
                 'clasificacion_biologico': getattr(linea.producto_id, 'clasificacion_biologico', False),
-                
+
                 # Información del envase
                 'envase_tipo': getattr(linea.producto_id, 'envase_tipo_default', ''),
                 'envase_capacidad': getattr(linea.producto_id, 'envase_capacidad_default', 0),
                 'etiqueta_si': True,
                 'etiqueta_no': False,
             }
-            
+
             residuo = self.env['manifiesto.ambiental.residuo'].create(residuo_vals)
-            
+
             # 🔥 CORREGIDO: Asignar lote como REFERENCIAL (campo Char)
             if linea.lote_id:
                 residuo.lot_id_referencial = linea.lote_id.name  # ✅ Usar nombre del lote como texto
                 _logger.info(f"✅ Lote referencial asignado: {linea.lote_id.name}")
-        
+
         _logger.info(f"🎉 === FIN CREACIÓN MANIFIESTO: {manifiesto.numero_manifiesto} ===")
         return manifiesto
 
@@ -544,7 +541,7 @@ class SalidaAcopioLinea(models.Model):
                         record.stock_disponible = sum(quants.mapped('quantity'))
                     else:
                         record.stock_disponible = 0.0
-                except:
+                except Exception:
                     record.stock_disponible = 0.0
             else:
                 record.stock_disponible = 0.0

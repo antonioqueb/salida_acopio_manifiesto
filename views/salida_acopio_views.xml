@@ -25,17 +25,13 @@
     </record>
 
     <!-- Vista de lista para salida de acopio -->
+    <!-- ✅ v19: eliminado bloque <header> dentro de <list> (descontinuado en v19) -->
+    <!-- ✅ v19: widget="badge" en campo state -->
     <record id="view_salida_acopio_list" model="ir.ui.view">
         <field name="name">salida.acopio.list</field>
         <field name="model">salida.acopio</field>
         <field name="arch" type="xml">
             <list string="Salidas de Acopio" default_order="fecha_salida desc">
-                <header>
-                    <button name="%(action_salida_acopio_wizard)d" 
-                            string="Nueva Salida" 
-                            type="action" 
-                            class="btn-primary"/>
-                </header>
                 <field name="numero_referencia"/>
                 <field name="transportista_id"/>
                 <field name="destinatario_id"/>
@@ -44,7 +40,10 @@
                 <field name="total_residuos"/>
                 <field name="cantidad_total"/>
                 <field name="manifiesto_salida_id"/>
-                <field name="state" decoration-success="state == 'done'" decoration-muted="state == 'cancel'"/>
+                <field name="state"
+                       widget="badge"
+                       decoration-success="state == 'done'"
+                       decoration-muted="state == 'cancel'"/>
                 <button name="action_view_picking" 
                         type="object" 
                         string="Ver Transferencia" 
