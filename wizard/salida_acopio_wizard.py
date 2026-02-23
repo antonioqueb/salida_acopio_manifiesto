@@ -188,25 +188,46 @@ class SalidaAcopioWizardLinea(models.TransientModel):
     )
 
     def _get_location_acopio(self):
-        return self.env['stock.location'].search([
+        company = self.env.company
+        _logger.info(f"[ACOPIO DEBUG] Buscando ubicación Acopio para company_id={company.id} ({company.name})")
+        location = self.env['stock.location'].search([
             ('name', '=', 'Acopio'),
-            ('company_id', '=', self.env.company.id)
+            ('company_id', '=', company.id)
         ], limit=1)
+        if location:
+            _logger.info(f"[ACOPIO DEBUG] Ubicación encontrada: id={location.id}, complete_name={location.complete_name}")
+        else:
+            # Intentar sin filtro de compañía para ver qué existe
+            todas = self.env['stock.location'].search([('name', '=', 'Acopio')])
+            _logger.warning(f"[ACOPIO DEBUG] NO se encontró Acopio para company_id={company.id}. "
+                            f"Ubicaciones 'Acopio' existentes: {[(l.id, l.complete_name, l.company_id.id) for l in todas]}")
+        return location
 
     def _recompute_lotes_disponibles(self):
         """Recomputa y guarda lotes disponibles para el producto actual."""
+        _logger.info(f"[ACOPIO DEBUG] _recompute_lotes_disponibles() llamado. producto_id={self.producto_id.id if self.producto_id else None}")
         location_acopio = self._get_location_acopio()
         if self.producto_id and location_acopio:
-            quants = self.env['stock.quant'].search([
+            # Sin filtro de quantity para ver todo lo que hay
+            todos_quants = self.env['stock.quant'].search([
                 ('product_id', '=', self.producto_id.id),
                 ('location_id', '=', location_acopio.id),
-                ('quantity', '>', 0),
-                ('lot_id', '!=', False),
             ])
+            _logger.info(f"[ACOPIO DEBUG] Todos los quants en Acopio para producto {self.producto_id.name} "
+                         f"(id={self.producto_id.id}): "
+                         f"{[(q.id, q.lot_id.name if q.lot_id else 'sin lote', q.quantity, q.reserved_quantity) for q in todos_quants]}")
+
+            quants = todos_quants.filtered(lambda q: q.quantity > 0 and q.lot_id)
             lot_ids = quants.mapped('lot_id').ids
-            _logger.info(f"Lotes disponibles para {self.producto_id.name}: {lot_ids}")
+            _logger.info(f"[ACOPIO DEBUG] Quants con quantity>0 y lote: {[(q.lot_id.name, q.quantity) for q in quants]}")
+            _logger.info(f"[ACOPIO DEBUG] lot_ids resultantes: {lot_ids}")
             self.lotes_disponibles_ids = [(6, 0, lot_ids)]
+            _logger.info(f"[ACOPIO DEBUG] lotes_disponibles_ids asignados: {self.lotes_disponibles_ids.ids}")
         else:
+            if not self.producto_id:
+                _logger.warning("[ACOPIO DEBUG] No hay producto_id seleccionado")
+            if not location_acopio:
+                _logger.warning("[ACOPIO DEBUG] No se encontró la ubicación Acopio")
             self.lotes_disponibles_ids = [(5, 0, 0)]
 
     @api.depends('producto_id', 'lote_id')
