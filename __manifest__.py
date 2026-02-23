@@ -27,7 +27,7 @@
     ''',
     'author': 'Alphaqueb Consulting',
     'website': 'https://alphaqueb.com',
-    'depends': ['base', 'stock', 'manifiesto_ambiental', 'ingreso_acopio'],
+    'depends': ['base', 'stock', 'manifiesto_ambiental', 'ingreso_acopio_sai'],
     'data': [
         'security/ir.model.access.csv',
         'data/stock_data.xml',
