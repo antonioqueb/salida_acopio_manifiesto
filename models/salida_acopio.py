@@ -295,7 +295,7 @@ class SalidaAcopio(models.Model):
                 'etiqueta_no': False,
             })
             if linea.lote_id:
-                residuo.lot_id_referencial = linea.lote_id.name
+                residuo.lot_id = linea.lote_id.id
         _logger.info(f"🎉 FIN CREACIÓN MANIFIESTO: {manifiesto.numero_manifiesto}")
         return manifiesto
 
