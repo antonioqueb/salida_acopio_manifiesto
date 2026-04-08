@@ -39,8 +39,10 @@ from . import wizard```
     'data': [
         'security/ir.model.access.csv',
         'data/stock_data.xml',
+        'reports/manifiesto_salida_report.xml',
         'wizard/salida_acopio_wizard_views.xml',
         'views/salida_acopio_views.xml',
+        'views/salida_acopio_print_views.xml',
         'views/salida_acopio_menus.xml',
     ],
     'demo': [],
@@ -70,7 +72,27 @@ from . import wizard```
 ```py
 # -*- coding: utf-8 -*-
 from . import salida_acopio
+from . import salida_acopio_print
 from . import stock_picking_inherit```
+
+## ./models/salida_acopio_print.py
+```py
+# -*- coding: utf-8 -*-
+from odoo import models, _
+from odoo.exceptions import UserError
+
+
+class SalidaAcopioPrint(models.Model):
+    _inherit = 'salida.acopio'
+
+    def action_print_manifiesto_salida(self):
+        """Imprime el manifiesto de salida usando el reporte específico de salida."""
+        self.ensure_one()
+        if not self.manifiesto_salida_id:
+            raise UserError(_("No hay manifiesto de salida asociado a este registro."))
+        return self.env.ref(
+            'salida_acopio_manifiesto.action_report_manifiesto_salida'
+        ).report_action(self.manifiesto_salida_id)```
 
 ## ./models/salida_acopio.py
 ```py
@@ -605,6 +627,424 @@ class StockPicking(models.Model):
         for record in self:
             record.es_salida_acopio = bool(record.salida_acopio_id)```
 
+## ./reports/manifiesto_salida_report.xml
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- FORMATO DE PÁGINA A4 SIN MÁRGENES (SALIDA) -->
+    <record id="paperformat_manifiesto_salida_sin_margen" model="report.paperformat">
+        <field name="name">Manifiesto Salida</field>
+        <field name="default" eval="False"/>
+        <field name="format">A4</field>
+        <field name="orientation">Portrait</field>
+        <field name="margin_top">2</field>
+        <field name="margin_bottom">10</field>
+        <field name="margin_left">5</field>
+        <field name="margin_right">5</field>
+        <field name="header_line" eval="False"/>
+        <field name="header_spacing">35</field>
+        <field name="dpi">90</field>
+    </record>
+
+    <!-- ACCIÓN DEL REPORTE DE SALIDA -->
+    <record id="action_report_manifiesto_salida" model="ir.actions.report">
+        <field name="name">Manifiesto de Salida Report</field>
+        <field name="model">manifiesto.ambiental</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">salida_acopio_manifiesto.manifiesto_salida_document</field>
+        <field name="report_file">salida_acopio_manifiesto.manifiesto_salida_document</field>
+        <!-- NO binding_model_id para que no aparezca en el menú Imprimir del manifiesto genérico -->
+        <field name="paperformat_id" ref="salida_acopio_manifiesto.paperformat_manifiesto_salida_sin_margen"/>
+    </record>
+
+    <!-- PLANTILLA QWEB DEL REPORTE DE SALIDA (idéntica al de ingreso por ahora) -->
+    <template id="manifiesto_salida_document">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="doc">
+                <t t-call="web.external_layout">
+                    <div class="page">
+                        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+                        <style>
+                            @page { margin: 5mm; size: A4; }
+
+                            body, td, th, strong, .labelcell, .subcell {
+                                font-family: "DejaVu Sans", Arial, "Liberation Sans", sans-serif !important;
+                                font-size: 10.5px;
+                                line-height: 1.15;
+                            }
+                            .page { margin-top: 2px !important; padding-top: 2px !important; }
+
+                            .header, .o_company_document_layout .header, .company_address, .o_company_address,
+                            .external_layout .header, .address, .o_report_layout_standard .header,
+                            .o_report_layout_boxed .header, .o_report_layout_clean .header {
+                                margin-bottom: 8px !important;
+                                padding-bottom: 4px !important;
+                                border-bottom: none !important;
+                            }
+
+                            .footer, .o_company_document_layout .footer {
+                                display: none !important;
+                                height: 0px !important;
+                                padding: 0px !important;
+                                margin: 0px !important;
+                            }
+
+                            .page-title {
+                                text-align: center;
+                                font-size: 12px;
+                                font-weight: 700;
+                                margin: 2px 0 4px;
+                                font-family: "DejaVu Sans", Arial, sans-serif !important;
+                            }
+
+                            table { width: 100%; border-collapse: collapse; margin-bottom: 2px; page-break-inside: avoid; }
+                            td, th { border: 1px solid #666; padding: 2px 4px; font-size: 10px; vertical-align: top; }
+
+                            th, .header-table, .labelcell, .subcell { background: none !important; }
+                            th, .header-table { font-weight: 700; text-align: center; }
+                            .labelcell { font-weight: 700; font-size: 10.5px; }
+                            .subcell { font-weight: 700; font-size: 9.8px; }
+
+                            .no-border { border: none !important; }
+                            .center-text { text-align: center; }
+
+                            table.section-4 { width: 100%; border-collapse: collapse; table-layout: fixed; }
+
+                            table.signature-section { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 2px; }
+                            table.signature-section > tbody > tr > td { border: none !important; padding: 0; }
+                            .signature-container { border: 1px solid #666; padding: 4px; }
+                            .signature-text { margin: 0 0 4px 0; }
+                            .signature-fields { display: table; width: 100%; margin-top: 2px; }
+                            .signature-fields .cell { display: table-cell; vertical-align: top; padding-right: 8px; }
+                            .signature-fields .cell:last-child { padding-right: 0; }
+
+                            tr, td { page-break-inside: avoid; }
+                        </style>
+
+                        <!-- TÍTULO PRINCIPAL -->
+                        <div class="page-title">
+                            MANIFIESTO DE ENTREGA, TRANSPORTE Y RECEPCIÓN DE RESIDUOS PELIGROSOS (SALIDA)
+                        </div>
+
+                        <!-- ENCABEZADO 1-3 -->
+                        <table>
+                            <tr>
+                                <td class="labelcell" style="width:45%">
+                                    1. Núm. de registro ambiental: <span t-field="doc.numero_registro_ambiental"/>
+                                </td>
+                                <td class="labelcell" style="width:40%">
+                                    2. Núm. de manifiesto: <span t-field="doc.numero_manifiesto"/>
+                                </td>
+                                <td class="labelcell" style="width:15%">
+                                    3. Página: <span t-field="doc.pagina"/>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <!-- 4. GENERADOR -->
+                        <table class="section-4">
+                            <colgroup>
+                                <col style="width:15%"/>
+                                <col style="width:25%"/>
+                                <col style="width:40%"/>
+                                <col style="width:10%"/>
+                                <col style="width:10%"/>
+                            </colgroup>
+
+                            <tr>
+                                <td class="labelcell" colspan="5">
+                                    4. Nombre o razón social del generador: <span t-field="doc.generador_nombre"/>
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td class="subcell">Domicilio</td>
+                                <td class="subcell">Código postal: <span t-field="doc.generador_codigo_postal"/></td>
+                                <td class="subcell">Calle: <span t-field="doc.generador_calle"/></td>
+                                <td class="subcell">Núm. Ext.: <span t-field="doc.generador_num_ext"/></td>
+                                <td class="subcell">Núm. Int.: <span t-field="doc.generador_num_int"/></td>
+                            </tr>
+
+                            <tr>
+                                <td class="subcell" colspan="2">
+                                    Colonia: <span t-field="doc.generador_colonia"/>
+                                </td>
+                                <td class="subcell" colspan="1">
+                                    Municipio o Delegación: <span t-field="doc.generador_municipio"/>
+                                </td>
+                                <td class="subcell" colspan="2">
+                                    Estado: <span t-field="doc.generador_estado"/>
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td class="subcell" colspan="2">
+                                    Teléfono: <span t-field="doc.generador_telefono"/>
+                                </td>
+                                <td class="subcell" colspan="3">
+                                    Correo electrónico: <span t-field="doc.generador_email"/>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <!-- 5. IDENTIFICACIÓN DE LOS RESIDUOS -->
+                        <table>
+                            <colgroup>
+                                <col style="width:25%"/>
+                                <col style="width:3%"/>
+                                <col style="width:3%"/>
+                                <col style="width:3%"/>
+                                <col style="width:3%"/>
+                                <col style="width:3%"/>
+                                <col style="width:3%"/>
+                                <col style="width:3%"/>
+                                <col style="width:12%"/>
+                                <col style="width:10%"/>
+                                <col style="width:10%"/>
+                                <col style="width:3%"/>
+                                <col style="width:3%"/>
+                            </colgroup>
+
+                            <tr>
+                                <th colspan="13" class="header-table">5. Identificación de los residuos</th>
+                            </tr>
+                            <tr>
+                                <th class="header-table">Nombre del residuo</th>
+                                <th class="header-table" colspan="7">Clasificación</th>
+                                <th class="header-table" colspan="2">Envase</th>
+                                <th class="header-table">Cantidad (kg)</th>
+                                <th class="header-table" colspan="2">Etiqueta</th>
+                            </tr>
+                            <tr>
+                                <th class="header-table"></th>
+                                <th class="header-table">C</th>
+                                <th class="header-table">R</th>
+                                <th class="header-table">E</th>
+                                <th class="header-table">T</th>
+                                <th class="header-table">I</th>
+                                <th class="header-table">B</th>
+                                <th class="header-table">M</th>
+                                <th class="header-table">Embalaje</th>
+                                <th class="header-table">Capacidad</th>
+                                <th class="header-table"></th>
+                                <th class="header-table">Sí</th>
+                                <th class="header-table">No</th>
+                            </tr>
+
+                            <t t-foreach="doc.residuo_ids" t-as="residuo">
+                                <tr>
+                                    <td><span t-field="residuo.nombre_residuo"/></td>
+                                    <td class="center-text"><span t-if="residuo.clasificacion_corrosivo">X</span></td>
+                                    <td class="center-text"><span t-if="residuo.clasificacion_reactivo">X</span></td>
+                                    <td class="center-text"><span t-if="residuo.clasificacion_explosivo">X</span></td>
+                                    <td class="center-text"><span t-if="residuo.clasificacion_toxico">X</span></td>
+                                    <td class="center-text"><span t-if="residuo.clasificacion_inflamable">X</span></td>
+                                    <td class="center-text"><span t-if="residuo.clasificacion_biologico">X</span></td>
+                                    <td class="center-text"></td>
+                                    <td class="center-text">
+                                        <span t-if="residuo.packaging_id" t-field="residuo.packaging_id.name"/>
+                                        <span t-elif="residuo.envase_tipo" t-field="residuo.envase_tipo"/>
+                                    </td>
+                                    <td class="center-text"><span t-field="residuo.envase_capacidad"/></td>
+                                    <td class="center-text"><span t-field="residuo.cantidad"/> kg</td>
+                                    <td class="center-text"><span t-if="residuo.etiqueta_si">X</span></td>
+                                    <td class="center-text"><span t-if="residuo.etiqueta_no">X</span></td>
+                                </tr>
+                            </t>
+
+                            <t t-set="residuos_count" t-value="len(doc.residuo_ids)"/>
+                            <t t-set="min_rows" t-value="18"/>
+                            <t t-set="empty_rows" t-value="max(0, min_rows - residuos_count)"/>
+                            <t t-foreach="range(empty_rows)" t-as="empty_row">
+                                <tr style="height: 22px;">
+                                    <td>&#160;</td><td>&#160;</td><td>&#160;</td><td>&#160;</td><td>&#160;</td>
+                                    <td>&#160;</td><td>&#160;</td><td>&#160;</td><td>&#160;</td><td>&#160;</td>
+                                    <td>&#160;</td><td>&#160;</td><td>&#160;</td>
+                                </tr>
+                            </t>
+                        </table>
+
+                        <!-- 6. INSTRUCCIONES ESPECIALES -->
+                        <table>
+                            <tr>
+                                <td class="labelcell">6. Instrucciones especiales e información adicional para el manejo seguro:</td>
+                            </tr>
+                            <tr>
+                                <td style="height: 28px; vertical-align: top;">
+                                    <span t-field="doc.instrucciones_especiales"/>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <!-- 7. DECLARACIÓN DEL GENERADOR -->
+                        <table class="signature-section">
+                            <tr>
+                                <td>
+                                    <div class="signature-container">
+                                        <div class="signature-text">
+                                            7. Declaración del generador: Declaro bajo protesta de decir verdad que el contenido de este lote está total y correctamente descrito mediante el número de manifiesto, nombre del residuo, características CRETIB, debidamente envasado y etiquetado y que se han previsto las condiciones de seguridad para su transporte por vía terrestre de acuerdo con la legislación vigente.
+                                        </div>
+                                        <div class="signature-fields">
+                                            <div class="cell" style="width:40%;">
+                                                <strong>Nombre y firma del responsable:</strong><br/>
+                                                <span t-field="doc.generador_responsable_nombre"/>
+                                            </div>
+                                            <div class="cell" style="width:30%;">
+                                                <strong>Fecha:</strong><br/>
+                                                <span t-field="doc.generador_fecha"/>
+                                            </div>
+                                            <div class="cell" style="width:30%;">
+                                                <strong>Sello:</strong><br/>
+                                                <span t-field="doc.generador_sello"/>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <!-- 8. TRANSPORTISTA -->
+                        <table>
+                            <tr>
+                                <td colspan="4" class="labelcell">8. Nombre o razón social del transportista: <span t-field="doc.transportista_nombre"/></td>
+                            </tr>
+                            <tr>
+                                <td class="subcell" style="width:25%;">Código postal: <span t-field="doc.transportista_codigo_postal"/></td>
+                                <td class="subcell" style="width:25%;">Calle: <span t-field="doc.transportista_calle"/></td>
+                                <td class="subcell" style="width:25%;">Núm. Ext.: <span t-field="doc.transportista_num_ext"/></td>
+                                <td class="subcell" style="width:25%;">Núm. Int.: <span t-field="doc.transportista_num_int"/></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Colonia:</strong> <span t-field="doc.transportista_colonia"/></td>
+                                <td><strong>Municipio o Delegación:</strong> <span t-field="doc.transportista_municipio"/></td>
+                                <td colspan="2"><strong>Estado:</strong> <span t-field="doc.transportista_estado"/></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Teléfono:</strong> <span t-field="doc.transportista_telefono"/></td>
+                                <td colspan="3"><strong>Correo electrónico:</strong> <span t-field="doc.transportista_email"/></td>
+                            </tr>
+                        </table>
+
+                        <!-- 9-12. INFORMACIÓN DEL TRANSPORTE -->
+                        <table>
+                            <tr>
+                                <td style="width:25%;"><strong>9. Núm. de autorización de la SEMARNAT:</strong><br/><span t-field="doc.numero_autorizacion_semarnat"/></td>
+                                <td style="width:25%;"><strong>10. Núm. de permiso S.C.T.:</strong><br/><span t-field="doc.numero_permiso_sct"/></td>
+                                <td style="width:25%;"><strong>11. Tipo de vehículo:</strong><br/><span t-field="doc.tipo_vehiculo"/></td>
+                                <td style="width:25%;"><strong>12. Núm. de placa:</strong><br/><span t-field="doc.numero_placa"/></td>
+                            </tr>
+                        </table>
+
+                        <!-- 13. RUTA -->
+                        <table>
+                            <tr>
+                                <td class="labelcell">13. Ruta de la empresa generadora hasta su entrega:</td>
+                            </tr>
+                            <tr>
+                                <td style="height: 28px; vertical-align: top;">
+                                    <span t-field="doc.ruta_empresa"/>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <!-- 14. DECLARACIÓN DEL TRANSPORTISTA -->
+                        <table class="signature-section">
+                            <tr>
+                                <td>
+                                    <div class="signature-container">
+                                        <div class="signature-text">
+                                            14. Declaración del transportista: Declaro bajo protesta de decir verdad que recibí los residuos peligrosos descritos en el manifiesto para su transporte a la empresa destinataria señalada por el generador.
+                                        </div>
+                                        <div class="signature-fields">
+                                            <div class="cell" style="width:40%;">
+                                                <strong>Nombre y firma del responsable:</strong><br/>
+                                                <span t-field="doc.transportista_responsable_nombre"/>
+                                            </div>
+                                            <div class="cell" style="width:30%;">
+                                                <strong>Fecha:</strong><br/>
+                                                <span t-field="doc.transportista_fecha"/>
+                                            </div>
+                                            <div class="cell" style="width:30%;">
+                                                <strong>Sello:</strong><br/>
+                                                <span t-field="doc.transportista_sello"/>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <!-- 15. DESTINATARIO -->
+                        <table>
+                            <tr>
+                                <td colspan="4" class="labelcell">15. Nombre o razón social del destinatario: <span t-field="doc.destinatario_nombre"/></td>
+                            </tr>
+                            <tr>
+                                <td class="subcell" style="width:25%;">Código postal: <span t-field="doc.destinatario_codigo_postal"/></td>
+                                <td class="subcell" style="width:25%;">Calle: <span t-field="doc.destinatario_calle"/></td>
+                                <td class="subcell" style="width:25%;">Núm. Ext.: <span t-field="doc.destinatario_num_ext"/></td>
+                                <td class="subcell" style="width:25%;">Núm. Int.: <span t-field="doc.destinatario_num_int"/></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Colonia:</strong> <span t-field="doc.destinatario_colonia"/></td>
+                                <td><strong>Municipio o Delegación:</strong> <span t-field="doc.destinatario_municipio"/></td>
+                                <td colspan="2"><strong>Estado:</strong> <span t-field="doc.destinatario_estado"/></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Teléfono:</strong> <span t-field="doc.destinatario_telefono"/></td>
+                                <td colspan="3"><strong>Correo electrónico:</strong> <span t-field="doc.destinatario_email"/></td>
+                            </tr>
+                        </table>
+
+                        <!-- 16-18. INFORMACIÓN ADICIONAL DEL DESTINATARIO -->
+                        <table>
+                            <tr>
+                                <td style="width:50%;"><strong>16. Núm. autorización de la SEMARNAT:</strong><br/><span t-field="doc.numero_autorizacion_semarnat_destinatario"/></td>
+                                <td style="width:50%;"><strong>17. Nombre y cargo de la persona que recibe los residuos:</strong><br/><span t-field="doc.nombre_persona_recibe"/></td>
+                            </tr>
+                            <tr>
+                                <td colspan="2" class="labelcell">18. Observaciones:</td>
+                            </tr>
+                            <tr>
+                                <td colspan="2" style="height: 28px; vertical-align: top;">
+                                    <span t-field="doc.observaciones_destinatario"/>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <!-- 19. DECLARACIÓN DEL DESTINATARIO -->
+                        <table class="signature-section">
+                            <tr>
+                                <td>
+                                    <div class="signature-container">
+                                        <div class="signature-text">
+                                            19. Declaración del destinatario: Declaro bajo protesta de decir verdad que recibí los residuos peligrosos descritos en el manifiesto.
+                                        </div>
+                                        <div class="signature-fields">
+                                            <div class="cell" style="width:40%;">
+                                                <strong>Nombre y firma del responsable:</strong><br/>
+                                                <span t-field="doc.destinatario_responsable_nombre"/>
+                                            </div>
+                                            <div class="cell" style="width:30%;">
+                                                <strong>Fecha:</strong><br/>
+                                                <span t-field="doc.destinatario_fecha"/>
+                                            </div>
+                                            <div class="cell" style="width:30%;">
+                                                <strong>Sello:</strong><br/>
+                                                <span t-field="doc.destinatario_sello"/>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+</odoo>```
+
 ## ./views/salida_acopio_menus.xml
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -676,6 +1116,26 @@ class StockPicking(models.Model):
               parent="menu_salida_acopio_root"
               action="action_manifiestos_salida"
               sequence="40"/>
+</odoo>```
+
+## ./views/salida_acopio_print_views.xml
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="view_salida_acopio_form_print_button" model="ir.ui.view">
+        <field name="name">salida.acopio.form.print.button</field>
+        <field name="model">salida.acopio</field>
+        <field name="inherit_id" ref="salida_acopio_manifiesto.view_salida_acopio_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//button[@name='action_view_manifiesto'][2]" position="after">
+                <button name="action_print_manifiesto_salida"
+                        string="Imprimir Manifiesto Salida"
+                        type="object"
+                        class="btn-primary"
+                        invisible="state != 'done'"/>
+            </xpath>
+        </field>
+    </record>
 </odoo>```
 
 ## ./views/salida_acopio_views.xml

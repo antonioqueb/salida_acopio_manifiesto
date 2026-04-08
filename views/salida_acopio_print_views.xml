@@ -5,7 +5,7 @@
         <field name="model">salida.acopio</field>
         <field name="inherit_id" ref="salida_acopio_manifiesto.view_salida_acopio_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//button[@name='action_view_manifiesto'][2]" position="after">
+            <xpath expr="//header/button[@name='action_view_manifiesto']" position="after">
                 <button name="action_print_manifiesto_salida"
                         string="Imprimir Manifiesto Salida"
                         type="object"
