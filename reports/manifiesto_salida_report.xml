@@ -2,7 +2,7 @@
 <odoo>
     <!-- FORMATO DE PÁGINA A4 SIN MÁRGENES (SALIDA) -->
     <record id="paperformat_manifiesto_salida_sin_margen" model="report.paperformat">
-        <field name="name">Manifiesto Salida Sin Margen</field>
+        <field name="name">Manifiesto Salida</field>
         <field name="default" eval="False"/>
         <field name="format">A4</field>
         <field name="orientation">Portrait</field>
@@ -17,7 +17,7 @@
 
     <!-- ACCIÓN DEL REPORTE DE SALIDA -->
     <record id="action_report_manifiesto_salida" model="ir.actions.report">
-        <field name="name">Manifiesto de Salida</field>
+        <field name="name">Manifiesto de Salida Report</field>
         <field name="model">manifiesto.ambiental</field>
         <field name="report_type">qweb-pdf</field>
         <field name="report_name">salida_acopio_manifiesto.manifiesto_salida_document</field>
