@@ -31,8 +31,10 @@
     'data': [
         'security/ir.model.access.csv',
         'data/stock_data.xml',
+        'reports/manifiesto_salida_report.xml',
         'wizard/salida_acopio_wizard_views.xml',
         'views/salida_acopio_views.xml',
+        'views/salida_acopio_print_views.xml',
         'views/salida_acopio_menus.xml',
     ],
     'demo': [],
