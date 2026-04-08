@@ -32,9 +32,11 @@
                     <field name="linea_ids" nolabel="1">
                         <list editable="bottom" string="Residuos">
                             <field name="producto_id" 
+                                   domain="[('type', '=', 'consu')]"
                                    placeholder="Seleccione producto con stock en Acopio..."
                                    options="{'no_create': True}"/>
                             <field name="lote_id" 
+                                   domain="[('product_id', '=', producto_id)]"
                                    options="{'no_create': True}"/>
                             <field name="stock_disponible" readonly="1"/>
                             <field name="cantidad" 
@@ -45,9 +47,11 @@
                         <form string="Línea de Residuo">
                             <group col="2">
                                 <field name="producto_id" 
+                                       domain="[('type', '=', 'consu')]"
                                        placeholder="Seleccione producto con stock en Acopio..."
                                        options="{'no_create': True}"/>
                                 <field name="lote_id" 
+                                       domain="[('product_id', '=', producto_id)]"
                                        options="{'no_create': True}"/>
                                 <field name="stock_disponible" readonly="1"/>
                                 <field name="cantidad"/>
@@ -66,7 +70,7 @@
                 <div class="alert alert-info" style="margin-top: 15px;">
                     <strong>ℹ️ Información importante:</strong>
                     <ul style="margin: 5px 0;">
-                        <li>Solo se muestran productos que tienen stock en la ubicación "Acopio"</li>
+                        <li>Solo se muestran productos de tipo consumible que tienen stock en la ubicación "Acopio"</li>
                         <li>Para productos con seguimiento por lotes, debe seleccionar un lote específico</li>
                         <li>Se verificará que haya stock suficiente antes de confirmar</li>
                         <li>Se generará automáticamente un manifiesto donde SAI aparece como generador</li>

@@ -134,16 +134,24 @@
                         <page string="Líneas de Salida">
                             <field name="linea_ids" readonly="state != 'draft'">
                                 <list editable="bottom">
-                                    <field name="producto_id" options="{'no_create': True}"/>
-                                    <field name="lote_id" options="{'no_create': True}"/>
+                                    <field name="producto_id"
+                                           domain="[('type', '=', 'consu')]"
+                                           options="{'no_create': True}"/>
+                                    <field name="lote_id"
+                                           domain="[('product_id', '=', producto_id)]"
+                                           options="{'no_create': True}"/>
                                     <field name="stock_disponible" readonly="1"/>
                                     <field name="cantidad"/>
                                     <field name="clasificaciones_cretib" readonly="1"/>
                                 </list>
                                 <form string="Línea de Salida">
                                     <group col="2">
-                                        <field name="producto_id" options="{'no_create': True}"/>
-                                        <field name="lote_id" options="{'no_create': True}"/>
+                                        <field name="producto_id"
+                                               domain="[('type', '=', 'consu')]"
+                                               options="{'no_create': True}"/>
+                                        <field name="lote_id"
+                                               domain="[('product_id', '=', producto_id)]"
+                                               options="{'no_create': True}"/>
                                         <field name="stock_disponible" readonly="1"/>
                                         <field name="cantidad"/>
                                         <field name="clasificaciones_cretib" readonly="1"/>
