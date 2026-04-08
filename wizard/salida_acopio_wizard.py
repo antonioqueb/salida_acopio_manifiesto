@@ -5,6 +5,20 @@ import logging
 
 _logger = logging.getLogger(__name__)
 
+
+def _find_location_acopio(env, company_id=None):
+    """Busca la ubicación Acopio de forma flexible por complete_name."""
+    domain = [
+        ('complete_name', 'ilike', 'Acopio'),
+        ('usage', '=', 'internal'),
+    ]
+    if company_id:
+        loc = env['stock.location'].search(domain + [('company_id', '=', company_id)], limit=1)
+        if loc:
+            return loc
+    return env['stock.location'].search(domain, limit=1)
+
+
 class SalidaAcopioWizard(models.TransientModel):
     _name = 'salida.acopio.wizard'
     _description = 'Wizard para Salida de Acopio'
@@ -83,11 +97,14 @@ class SalidaAcopioWizard(models.TransientModel):
 
         lineas_data = []
         for linea in self.linea_ids:
-            _logger.info(f"Validando línea: ID={linea.id}, producto_id={linea.producto_id.id if linea.producto_id else 'None'}")
             if not linea.producto_id or not linea.producto_id.id:
-                raise UserError(f"Una de las líneas no tiene producto asignado. Línea ID: {linea.id}")
+                raise UserError(
+                    f"Una de las líneas no tiene producto asignado. Línea ID: {linea.id}"
+                )
             if linea.cantidad <= 0:
-                raise UserError(f"La cantidad para el producto {linea.producto_id.name} debe ser mayor a cero.")
+                raise UserError(
+                    f"La cantidad para el producto {linea.producto_id.name} debe ser mayor a cero."
+                )
             if linea.cantidad > linea.stock_disponible:
                 raise UserError(
                     f"No hay suficiente stock para el producto {linea.producto_id.name}. "
@@ -98,8 +115,6 @@ class SalidaAcopioWizard(models.TransientModel):
                 'lote_id': linea.lote_id.id if linea.lote_id else False,
                 'cantidad': linea.cantidad,
             })
-
-        _logger.info(f"Validadas {len(lineas_data)} líneas correctamente")
 
         try:
             salida_vals = {
@@ -176,59 +191,24 @@ class SalidaAcopioWizardLinea(models.TransientModel):
         readonly=True
     )
 
-    # ✅ CLAVE: store=True para que el domain funcione en la vista
-    lotes_disponibles_ids = fields.Many2many(
-        'stock.lot',
-        'salida_acopio_wiz_linea_lot_rel',
-        'linea_id',
-        'lot_id',
-        string='Lotes Disponibles',
-        store=True,
-        help='Lotes con stock positivo para este producto en Acopio'
-    )
-
     def _get_location_acopio(self):
-        company = self.env.company
-        _logger.info(f"[ACOPIO DEBUG] Buscando ubicación Acopio para company_id={company.id} ({company.name})")
-        location = self.env['stock.location'].search([
-            ('name', '=', 'Acopio'),
-            ('company_id', '=', company.id)
-        ], limit=1)
-        if location:
-            _logger.info(f"[ACOPIO DEBUG] Ubicación encontrada: id={location.id}, complete_name={location.complete_name}")
-        else:
-            # Intentar sin filtro de compañía para ver qué existe
-            todas = self.env['stock.location'].search([('name', '=', 'Acopio')])
-            _logger.warning(f"[ACOPIO DEBUG] NO se encontró Acopio para company_id={company.id}. "
-                            f"Ubicaciones 'Acopio' existentes: {[(l.id, l.complete_name, l.company_id.id) for l in todas]}")
-        return location
+        return _find_location_acopio(self.env, self.env.company.id)
 
-    def _recompute_lotes_disponibles(self):
-        """Recomputa y guarda lotes disponibles para el producto actual."""
-        _logger.info(f"[ACOPIO DEBUG] _recompute_lotes_disponibles() llamado. producto_id={self.producto_id.id if self.producto_id else None}")
+    def _get_lot_ids_in_acopio(self):
+        """Retorna los IDs de lotes con stock > 0 en Acopio para el producto actual."""
+        if not self.producto_id:
+            return []
         location_acopio = self._get_location_acopio()
-        if self.producto_id and location_acopio:
-            # Sin filtro de quantity para ver todo lo que hay
-            todos_quants = self.env['stock.quant'].search([
-                ('product_id', '=', self.producto_id.id),
-                ('location_id', '=', location_acopio.id),
-            ])
-            _logger.info(f"[ACOPIO DEBUG] Todos los quants en Acopio para producto {self.producto_id.name} "
-                         f"(id={self.producto_id.id}): "
-                         f"{[(q.id, q.lot_id.name if q.lot_id else 'sin lote', q.quantity, q.reserved_quantity) for q in todos_quants]}")
-
-            quants = todos_quants.filtered(lambda q: q.quantity > 0 and q.lot_id)
-            lot_ids = quants.mapped('lot_id').ids
-            _logger.info(f"[ACOPIO DEBUG] Quants con quantity>0 y lote: {[(q.lot_id.name, q.quantity) for q in quants]}")
-            _logger.info(f"[ACOPIO DEBUG] lot_ids resultantes: {lot_ids}")
-            self.lotes_disponibles_ids = [(6, 0, lot_ids)]
-            _logger.info(f"[ACOPIO DEBUG] lotes_disponibles_ids asignados: {self.lotes_disponibles_ids.ids}")
-        else:
-            if not self.producto_id:
-                _logger.warning("[ACOPIO DEBUG] No hay producto_id seleccionado")
-            if not location_acopio:
-                _logger.warning("[ACOPIO DEBUG] No se encontró la ubicación Acopio")
-            self.lotes_disponibles_ids = [(5, 0, 0)]
+        if not location_acopio:
+            return []
+        quants = self.env['stock.quant'].search([
+            ('product_id', '=', self.producto_id.id),
+            ('location_id', '=', location_acopio.id),
+            ('quantity', '>', 0),
+        ])
+        lot_ids = quants.filtered(lambda q: q.lot_id).mapped('lot_id').ids
+        _logger.info(f"[ACOPIO WIZARD] Lotes disponibles para {self.producto_id.name}: {lot_ids}")
+        return lot_ids
 
     @api.depends('producto_id', 'lote_id')
     def _compute_stock_disponible(self):
@@ -262,13 +242,10 @@ class SalidaAcopioWizardLinea(models.TransientModel):
     def _onchange_producto_id(self):
         self.lote_id = False
         self.cantidad = 0.0
-        # ✅ Recomputar y guardar los lotes disponibles para que el domain funcione
-        self._recompute_lotes_disponibles()
-        return {
-            'domain': {
-                'lote_id': [('id', 'in', self.lotes_disponibles_ids.ids)]
-            }
-        }
+        if not self.producto_id:
+            return {'domain': {'lote_id': [('id', '=', False)]}}
+        lot_ids = self._get_lot_ids_in_acopio()
+        return {'domain': {'lote_id': [('id', 'in', lot_ids)]}}
 
     @api.onchange('lote_id')
     def _onchange_lote_id(self):

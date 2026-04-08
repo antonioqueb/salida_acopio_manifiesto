@@ -35,14 +35,12 @@
                                    placeholder="Seleccione producto con stock en Acopio..."
                                    options="{'no_create': True}"/>
                             <field name="lote_id" 
-                                   domain="[('id', 'in', lotes_disponibles_ids)]"
                                    options="{'no_create': True}"/>
                             <field name="stock_disponible" readonly="1"/>
                             <field name="cantidad" 
                                    decoration-bf="cantidad > stock_disponible"
                                    decoration-danger="cantidad > stock_disponible"/>
                             <field name="clasificaciones_cretib" readonly="1" optional="show"/>
-                            <field name="lotes_disponibles_ids" column_invisible="1"/>
                         </list>
                         <form string="Línea de Residuo">
                             <group col="2">
@@ -50,18 +48,11 @@
                                        placeholder="Seleccione producto con stock en Acopio..."
                                        options="{'no_create': True}"/>
                                 <field name="lote_id" 
-                                       domain="[('id', 'in', lotes_disponibles_ids)]"
                                        options="{'no_create': True}"/>
                                 <field name="stock_disponible" readonly="1"/>
                                 <field name="cantidad"/>
                                 <field name="clasificaciones_cretib" readonly="1"/>
-                                <field name="lotes_disponibles_ids" invisible="1"/>
                             </group>
-                            
-                            <div class="alert alert-info" invisible="not lotes_disponibles_ids">
-                                <strong>Lotes disponibles para este producto:</strong>
-                                <field name="lotes_disponibles_ids" widget="many2many_tags" readonly="1"/>
-                            </div>
                         </form>
                     </field>
                 </group>

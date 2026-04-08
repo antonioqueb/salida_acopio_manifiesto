@@ -6,6 +6,19 @@ import logging
 _logger = logging.getLogger(__name__)
 
 
+def _find_location_acopio(env, company_id=None):
+    """Busca la ubicación Acopio de forma flexible por complete_name."""
+    domain = [
+        ('complete_name', 'ilike', 'Acopio'),
+        ('usage', '=', 'internal'),
+    ]
+    if company_id:
+        loc = env['stock.location'].search(domain + [('company_id', '=', company_id)], limit=1)
+        if loc:
+            return loc
+    return env['stock.location'].search(domain, limit=1)
+
+
 class SalidaAcopio(models.Model):
     _name = 'salida.acopio'
     _description = 'Registro de Salida de Acopio'
@@ -300,13 +313,13 @@ class SalidaAcopio(models.Model):
         return manifiesto
 
     def _get_location_acopio(self):
-        location_acopio = self.env['stock.location'].search([
-            ('name', '=', 'Acopio'),
-            ('company_id', '=', self.company_id.id)
-        ], limit=1)
-        if not location_acopio:
-            raise UserError("No se encontró la ubicación 'Acopio'.")
-        return location_acopio
+        location = _find_location_acopio(self.env, self.company_id.id)
+        if not location:
+            raise UserError(
+                "No se encontró una ubicación de tipo interno que contenga 'Acopio' en su nombre. "
+                "Verifique que exista en Inventario → Configuración → Ubicaciones."
+            )
+        return location
 
     def action_cancelar(self):
         self.ensure_one()
@@ -358,15 +371,6 @@ class SalidaAcopioLinea(models.Model):
         'stock.lot', string='Lote',
     )
 
-    lote_domain_ids = fields.Many2many(
-        'stock.lot',
-        'salida_acopio_linea_lote_domain_rel',
-        'linea_id', 'lot_id',
-        string='Lotes en Acopio',
-        compute='_compute_lote_domain_ids',
-        store=True,
-    )
-
     cantidad = fields.Float(
         string='Cantidad (kg)', required=True, digits=(12, 3)
     )
@@ -384,51 +388,23 @@ class SalidaAcopioLinea(models.Model):
     )
 
     def _get_location_acopio(self):
-        company = self.env.company
-        _logger.info(f"[ACOPIO DEBUG FORM] Buscando ubicación Acopio para company_id={company.id} ({company.name})")
-        location = self.env['stock.location'].search([
-            ('name', '=', 'Acopio'),
-            ('company_id', '=', company.id)
-        ], limit=1)
-        if location:
-            _logger.info(f"[ACOPIO DEBUG FORM] Ubicación encontrada: id={location.id}, complete_name={location.complete_name}")
-        else:
-            todas = self.env['stock.location'].search([('name', '=', 'Acopio')])
-            _logger.warning(
-                f"[ACOPIO DEBUG FORM] NO se encontró Acopio para company_id={company.id}. "
-                f"Ubicaciones 'Acopio' existentes: {[(l.id, l.complete_name, l.company_id.id) for l in todas]}"
-            )
-        return location
+        return _find_location_acopio(self.env, self.env.company.id)
 
-    @api.depends('producto_id')
-    def _compute_lote_domain_ids(self):
-        for record in self:
-            _logger.info(f"[ACOPIO DEBUG FORM] _compute_lote_domain_ids() para producto_id={record.producto_id.id if record.producto_id else None}")
-            if not record.producto_id:
-                record.lote_domain_ids = [(5, 0, 0)]
-                continue
-            location_acopio = record._get_location_acopio()
-            if not location_acopio:
-                record.lote_domain_ids = [(5, 0, 0)]
-                continue
-
-            # Todos los quants sin filtro para diagnóstico
-            todos_quants = self.env['stock.quant'].search([
-                ('product_id', '=', record.producto_id.id),
-                ('location_id', '=', location_acopio.id),
-            ])
-            _logger.info(
-                f"[ACOPIO DEBUG FORM] Todos los quants en Acopio para {record.producto_id.name} "
-                f"(id={record.producto_id.id}): "
-                f"{[(q.id, q.lot_id.name if q.lot_id else 'sin lote', q.quantity, q.reserved_quantity) for q in todos_quants]}"
-            )
-
-            quants = todos_quants.filtered(lambda q: q.quantity > 0 and q.lot_id)
-            lot_ids = quants.mapped('lot_id').ids
-            _logger.info(f"[ACOPIO DEBUG FORM] Quants filtrados (qty>0 y con lote): {[(q.lot_id.name, q.quantity) for q in quants]}")
-            _logger.info(f"[ACOPIO DEBUG FORM] lot_ids resultantes: {lot_ids}")
-            record.lote_domain_ids = [(6, 0, lot_ids)]
-            _logger.info(f"[ACOPIO DEBUG FORM] lote_domain_ids asignados: {record.lote_domain_ids.ids}")
+    def _get_lot_ids_in_acopio(self):
+        """Retorna los IDs de lotes con stock > 0 en Acopio para el producto actual."""
+        if not self.producto_id:
+            return []
+        location_acopio = self._get_location_acopio()
+        if not location_acopio:
+            return []
+        quants = self.env['stock.quant'].search([
+            ('product_id', '=', self.producto_id.id),
+            ('location_id', '=', location_acopio.id),
+            ('quantity', '>', 0),
+        ])
+        lot_ids = quants.filtered(lambda q: q.lot_id).mapped('lot_id').ids
+        _logger.info(f"[ACOPIO] Lotes disponibles para {self.producto_id.name}: {lot_ids}")
+        return lot_ids
 
     @api.depends('producto_id', 'lote_id')
     def _compute_stock_disponible(self):
@@ -436,22 +412,19 @@ class SalidaAcopioLinea(models.Model):
             if not record.producto_id:
                 record.stock_disponible = 0.0
                 continue
-            try:
-                location_acopio = record._get_location_acopio()
-                if not location_acopio:
-                    record.stock_disponible = 0.0
-                    continue
-                domain = [
-                    ('product_id', '=', record.producto_id.id),
-                    ('location_id', '=', location_acopio.id),
-                    ('quantity', '>', 0),
-                ]
-                if record.lote_id:
-                    domain.append(('lot_id', '=', record.lote_id.id))
-                quants = self.env['stock.quant'].search(domain)
-                record.stock_disponible = sum(quants.mapped('quantity'))
-            except Exception:
+            location_acopio = record._get_location_acopio()
+            if not location_acopio:
                 record.stock_disponible = 0.0
+                continue
+            domain = [
+                ('product_id', '=', record.producto_id.id),
+                ('location_id', '=', location_acopio.id),
+                ('quantity', '>', 0),
+            ]
+            if record.lote_id:
+                domain.append(('lot_id', '=', record.lote_id.id))
+            quants = self.env['stock.quant'].search(domain)
+            record.stock_disponible = sum(quants.mapped('quantity'))
 
     @api.depends('producto_id')
     def _compute_clasificaciones_cretib(self):
@@ -463,16 +436,12 @@ class SalidaAcopioLinea(models.Model):
 
     @api.onchange('producto_id')
     def _onchange_producto_id(self):
-        _logger.info(f"[ACOPIO DEBUG FORM] _onchange_producto_id() producto={self.producto_id.name if self.producto_id else None}")
         self.lote_id = False
         self.cantidad = 0.0
-        self._compute_lote_domain_ids()
-        _logger.info(f"[ACOPIO DEBUG FORM] Después de _compute, lote_domain_ids.ids={self.lote_domain_ids.ids}")
-        return {
-            'domain': {
-                'lote_id': [('id', 'in', self.lote_domain_ids.ids)]
-            }
-        }
+        if not self.producto_id:
+            return {'domain': {'lote_id': [('id', '=', False)]}}
+        lot_ids = self._get_lot_ids_in_acopio()
+        return {'domain': {'lote_id': [('id', 'in', lot_ids)]}}
 
     @api.onchange('lote_id')
     def _onchange_lote_id(self):
