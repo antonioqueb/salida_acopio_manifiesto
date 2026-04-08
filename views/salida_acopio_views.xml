@@ -135,7 +135,7 @@
                             <field name="linea_ids" readonly="state != 'draft'">
                                 <list editable="bottom">
                                     <field name="producto_id"
-                                           domain="[('type', '=', 'consu')]"
+                                           domain="[('type', '!=', 'service')]"
                                            options="{'no_create': True}"/>
                                     <field name="lote_id"
                                            domain="[('product_id', '=', producto_id)]"
@@ -147,7 +147,7 @@
                                 <form string="Línea de Salida">
                                     <group col="2">
                                         <field name="producto_id"
-                                               domain="[('type', '=', 'consu')]"
+                                               domain="[('type', '!=', 'service')]"
                                                options="{'no_create': True}"/>
                                         <field name="lote_id"
                                                domain="[('product_id', '=', producto_id)]"
