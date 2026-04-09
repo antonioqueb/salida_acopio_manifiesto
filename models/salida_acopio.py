@@ -250,6 +250,7 @@ class SalidaAcopio(models.Model):
         _logger.info("=== INICIO CREACIÓN MANIFIESTO DE SALIDA ===")
         sai_partner = self._get_or_create_sai_partner()
         manifiesto_vals = {
+            'tipo_manifiesto': 'salida',
             'numero_manifiesto': self.numero_referencia,
             'generador_id': sai_partner.id,
             'generador_nombre': sai_partner.name,
@@ -289,7 +290,7 @@ class SalidaAcopio(models.Model):
             'company_id': self.company_id.id,
         }
         manifiesto = self.env['manifiesto.ambiental'].create(manifiesto_vals)
-        _logger.info(f"✅ Manifiesto creado: {manifiesto.numero_manifiesto}")
+        _logger.info(f"✅ Manifiesto creado: {manifiesto.numero_manifiesto} (tipo: salida)")
         for linea in self.linea_ids:
             residuo = self.env['manifiesto.ambiental.residuo'].create({
                 'manifiesto_id': manifiesto.id,
