@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- FORMATO DE PÁGINA A4 SIN MÁRGENES (SALIDA) -->
+    <!-- FORMATO DE PÁGINA A4 SIN MÁRGENES (SALIDA / CENTRO DE ACOPIO) -->
     <record id="paperformat_manifiesto_salida_sin_margen" model="report.paperformat">
         <field name="name">Manifiesto Salida</field>
         <field name="default" eval="False"/>
@@ -22,11 +22,10 @@
         <field name="report_type">qweb-pdf</field>
         <field name="report_name">salida_acopio_manifiesto.manifiesto_salida_document</field>
         <field name="report_file">salida_acopio_manifiesto.manifiesto_salida_document</field>
-        <!-- NO binding_model_id para que no aparezca en el menú Imprimir del manifiesto genérico -->
         <field name="paperformat_id" ref="salida_acopio_manifiesto.paperformat_manifiesto_salida_sin_margen"/>
     </record>
 
-    <!-- PLANTILLA QWEB DEL REPORTE DE SALIDA (idéntica al de ingreso por ahora) -->
+    <!-- PLANTILLA QWEB DEL REPORTE DE SALIDA -->
     <template id="manifiesto_salida_document">
         <t t-call="web.html_container">
             <t t-foreach="docs" t-as="doc">
@@ -92,7 +91,7 @@
 
                         <!-- TÍTULO PRINCIPAL -->
                         <div class="page-title">
-                            MANIFIESTO DE ENTREGA, TRANSPORTE Y RECEPCIÓN DE RESIDUOS PELIGROSOS (SALIDA)
+                            MANIFIESTO DE ENTREGA, TRANSPORTE Y RECEPCIÓN DE RESIDUOS PELIGROSOS (CENTRO DE ACOPIO)
                         </div>
 
                         <!-- ENCABEZADO 1-3 -->
@@ -110,7 +109,7 @@
                             </tr>
                         </table>
 
-                        <!-- 4. GENERADOR -->
+                        <!-- 4. CENTRO DE ACOPIO -->
                         <table class="section-4">
                             <colgroup>
                                 <col style="width:15%"/>
@@ -122,7 +121,7 @@
 
                             <tr>
                                 <td class="labelcell" colspan="5">
-                                    4. Nombre o razón social del generador: <span t-field="doc.generador_nombre"/>
+                                    4. Nombre o razón social del centro de acopio: <span t-field="doc.generador_nombre"/>
                                 </td>
                             </tr>
 
@@ -159,7 +158,8 @@
                         <!-- 5. IDENTIFICACIÓN DE LOS RESIDUOS -->
                         <table>
                             <colgroup>
-                                <col style="width:25%"/>
+                                <col style="width:18%"/>
+                                <col style="width:22%"/>
                                 <col style="width:3%"/>
                                 <col style="width:3%"/>
                                 <col style="width:3%"/>
@@ -167,24 +167,26 @@
                                 <col style="width:3%"/>
                                 <col style="width:3%"/>
                                 <col style="width:3%"/>
+                                <col style="width:10%"/>
+                                <col style="width:7%"/>
                                 <col style="width:12%"/>
-                                <col style="width:10%"/>
-                                <col style="width:10%"/>
-                                <col style="width:3%"/>
-                                <col style="width:3%"/>
+                                <col style="width:4%"/>
+                                <col style="width:4%"/>
                             </colgroup>
 
                             <tr>
-                                <th colspan="13" class="header-table">5. Identificación de los residuos</th>
+                                <th colspan="14" class="header-table">5. Identificación de los residuos</th>
                             </tr>
                             <tr>
+                                <th class="header-table">Núm. de manifiesto</th>
                                 <th class="header-table">Nombre del residuo</th>
                                 <th class="header-table" colspan="7">Clasificación</th>
                                 <th class="header-table" colspan="2">Envase</th>
-                                <th class="header-table">Cantidad (kg)</th>
+                                <th class="header-table">Cantidad (kg o ton)</th>
                                 <th class="header-table" colspan="2">Etiqueta</th>
                             </tr>
                             <tr>
+                                <th class="header-table"></th>
                                 <th class="header-table"></th>
                                 <th class="header-table">C</th>
                                 <th class="header-table">R</th>
@@ -193,7 +195,7 @@
                                 <th class="header-table">I</th>
                                 <th class="header-table">B</th>
                                 <th class="header-table">M</th>
-                                <th class="header-table">Embalaje</th>
+                                <th class="header-table">Tipo</th>
                                 <th class="header-table">Capacidad</th>
                                 <th class="header-table"></th>
                                 <th class="header-table">Sí</th>
@@ -202,6 +204,14 @@
 
                             <t t-foreach="doc.residuo_ids" t-as="residuo">
                                 <tr>
+                                    <!--
+                                        En este formato, la columna "Núm. de manifiesto" representa
+                                        el número de lote con el que identificas el residuo.
+                                        Aquí se asume que la línea tiene acceso al lote por lot_id.
+                                    -->
+                                    <td class="center-text">
+                                        <span t-if="residuo.lot_id" t-field="residuo.lot_id.name"/>
+                                    </td>
                                     <td><span t-field="residuo.nombre_residuo"/></td>
                                     <td class="center-text"><span t-if="residuo.clasificacion_corrosivo">X</span></td>
                                     <td class="center-text"><span t-if="residuo.clasificacion_reactivo">X</span></td>
@@ -215,7 +225,7 @@
                                         <span t-elif="residuo.envase_tipo" t-field="residuo.envase_tipo"/>
                                     </td>
                                     <td class="center-text"><span t-field="residuo.envase_capacidad"/></td>
-                                    <td class="center-text"><span t-field="residuo.cantidad"/> kg</td>
+                                    <td class="center-text"><span t-field="residuo.cantidad"/></td>
                                     <td class="center-text"><span t-if="residuo.etiqueta_si">X</span></td>
                                     <td class="center-text"><span t-if="residuo.etiqueta_no">X</span></td>
                                 </tr>
@@ -226,9 +236,20 @@
                             <t t-set="empty_rows" t-value="max(0, min_rows - residuos_count)"/>
                             <t t-foreach="range(empty_rows)" t-as="empty_row">
                                 <tr style="height: 22px;">
-                                    <td>&#160;</td><td>&#160;</td><td>&#160;</td><td>&#160;</td><td>&#160;</td>
-                                    <td>&#160;</td><td>&#160;</td><td>&#160;</td><td>&#160;</td><td>&#160;</td>
-                                    <td>&#160;</td><td>&#160;</td><td>&#160;</td>
+                                    <td>&#160;</td>
+                                    <td>&#160;</td>
+                                    <td>&#160;</td>
+                                    <td>&#160;</td>
+                                    <td>&#160;</td>
+                                    <td>&#160;</td>
+                                    <td>&#160;</td>
+                                    <td>&#160;</td>
+                                    <td>&#160;</td>
+                                    <td>&#160;</td>
+                                    <td>&#160;</td>
+                                    <td>&#160;</td>
+                                    <td>&#160;</td>
+                                    <td>&#160;</td>
                                 </tr>
                             </t>
                         </table>
@@ -245,13 +266,13 @@
                             </tr>
                         </table>
 
-                        <!-- 7. DECLARACIÓN DEL GENERADOR -->
+                        <!-- 7. DECLARACIÓN CENTRO DE ACOPIO -->
                         <table class="signature-section">
                             <tr>
                                 <td>
                                     <div class="signature-container">
                                         <div class="signature-text">
-                                            7. Declaración del generador: Declaro bajo protesta de decir verdad que el contenido de este lote está total y correctamente descrito mediante el número de manifiesto, nombre del residuo, características CRETIB, debidamente envasado y etiquetado y que se han previsto las condiciones de seguridad para su transporte por vía terrestre de acuerdo con la legislación vigente.
+                                            7. Declaro bajo protesta de decir verdad que el contenido de este lote está total y correctamente descrito mediante el núm. de manifiesto, nombre del residuo, características CRETIB, debidamente envasado y etiquetado y se han previsto las condiciones de seguridad para su transporte de acuerdo con la legislación vigente.
                                         </div>
                                         <div class="signature-fields">
                                             <div class="cell" style="width:40%;">
@@ -307,7 +328,7 @@
                         <!-- 13. RUTA -->
                         <table>
                             <tr>
-                                <td class="labelcell">13. Ruta de la empresa generadora hasta su entrega:</td>
+                                <td class="labelcell">13. Ruta del centro de acopio hasta su entrega:</td>
                             </tr>
                             <tr>
                                 <td style="height: 28px; vertical-align: top;">
@@ -322,7 +343,7 @@
                                 <td>
                                     <div class="signature-container">
                                         <div class="signature-text">
-                                            14. Declaración del transportista: Declaro bajo protesta de decir verdad que recibí los residuos peligrosos descritos en el manifiesto para su transporte a la empresa destinataria señalada por el generador.
+                                            14. Declaro bajo protesta de decir verdad que recibí los residuos peligrosos descritos en el manifiesto para su transporte a la empresa destinataria señalada por el centro de acopio.
                                         </div>
                                         <div class="signature-fields">
                                             <div class="cell" style="width:40%;">
@@ -387,7 +408,7 @@
                                 <td>
                                     <div class="signature-container">
                                         <div class="signature-text">
-                                            19. Declaración del destinatario: Declaro bajo protesta de decir verdad que recibí los residuos peligrosos descritos en el manifiesto.
+                                            19. Declaro bajo protesta de decir verdad que recibí los residuos peligrosos descritos en el manifiesto.
                                         </div>
                                         <div class="signature-fields">
                                             <div class="cell" style="width:40%;">
