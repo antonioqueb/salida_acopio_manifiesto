@@ -19,6 +19,25 @@ def _find_location_acopio(env, company_id=None):
     return env['stock.location'].search(domain, limit=1)
 
 
+ENVASE_TIPO_SELECTION = [
+    ('tambor', 'Tambor'),
+    ('contenedor', 'Contenedor'),
+    ('tote', 'Tote'),
+    ('tarima', 'Tarima'),
+    ('saco', 'Saco'),
+    ('caja', 'Caja'),
+    ('bolsa', 'Bolsa'),
+    ('tanque', 'Tanque'),
+    ('otro', 'Otro'),
+]
+
+RESIDUE_TYPE_SELECTION = [
+    ('rsu', 'RSU'),
+    ('rme', 'RME'),
+    ('rp', 'RP'),
+]
+
+
 class SalidaAcopio(models.Model):
     _name = 'salida.acopio'
     _description = 'Registro de Salida de Acopio'
@@ -148,15 +167,28 @@ class SalidaAcopio(models.Model):
         if not self.destinatario_id:
             raise UserError("Debe seleccionar un destinatario final.")
         for linea in self.linea_ids:
+            if linea.cantidad <= 0:
+                raise UserError(
+                    f"La cantidad del producto {linea.producto_id.name} debe ser mayor a cero."
+                )
             if linea.cantidad > linea.stock_disponible:
                 raise UserError(
                     f"No hay suficiente stock para el producto {linea.producto_id.name}. "
                     f"Solicitado: {linea.cantidad} kg, Disponible: {linea.stock_disponible} kg"
                 )
         try:
-            picking = self._create_stock_picking()
+            # 1. Sincronizar datos actualizados al lote (CRETIB, manejo)
+            self._sync_lot_data()
+            # 2. Crear manifiesto PRIMERO (para tener el ID al crear picking)
             manifiesto = self._create_manifiesto_salida()
-            self.write({'state': 'done', 'picking_id': picking.id, 'manifiesto_salida_id': manifiesto.id})
+            # 3. Crear picking (el related en stock.move.line resolverá el manifiesto)
+            picking = self._create_stock_picking()
+            # 4. Escribir en la salida
+            self.write({
+                'state': 'done',
+                'picking_id': picking.id,
+                'manifiesto_salida_id': manifiesto.id,
+            })
             _logger.info(f"Salida de acopio {self.numero_referencia} confirmada exitosamente")
             return {
                 'type': 'ir.actions.client',
@@ -171,6 +203,38 @@ class SalidaAcopio(models.Model):
         except Exception as e:
             _logger.error(f"Error al confirmar salida {self.numero_referencia}: {str(e)}")
             raise UserError(f"Error al realizar la salida: {str(e)}")
+
+    def _sync_lot_data(self):
+        """
+        Sincroniza los valores editados en la línea hacia el lote, para que
+        el historial de movimientos y reportes ambientales reflejen la
+        clasificación y plan de manejo correctos.
+        """
+        for linea in self.linea_ids:
+            if not linea.lote_id:
+                continue
+            lot_vals = {}
+            lot = linea.lote_id
+            # CRETIB
+            cretib_map = {
+                'clasificacion_corrosivo': linea.clasificacion_corrosivo,
+                'clasificacion_reactivo': linea.clasificacion_reactivo,
+                'clasificacion_explosivo': linea.clasificacion_explosivo,
+                'clasificacion_toxico': linea.clasificacion_toxico,
+                'clasificacion_inflamable': linea.clasificacion_inflamable,
+                'clasificacion_biologico': linea.clasificacion_biologico,
+            }
+            for k, v in cretib_map.items():
+                if k in lot._fields:
+                    lot_vals[k] = v
+            # Tipo de manejo
+            if 'tipo_manejo_id' in lot._fields and linea.tipo_manejo_id:
+                lot_vals['tipo_manejo_id'] = linea.tipo_manejo_id.id
+            if lot_vals:
+                try:
+                    lot.sudo().write(lot_vals)
+                except Exception as e:
+                    _logger.warning(f"No se pudo sincronizar datos al lote {lot.name}: {e}")
 
     def _create_stock_picking(self):
         location_acopio = self._get_location_acopio()
@@ -291,23 +355,29 @@ class SalidaAcopio(models.Model):
         }
         manifiesto = self.env['manifiesto.ambiental'].create(manifiesto_vals)
         _logger.info(f"✅ Manifiesto creado: {manifiesto.numero_manifiesto} (tipo: salida)")
+
+        # Crear residuos usando los valores capturados en la línea (NO del producto)
         for linea in self.linea_ids:
-            residuo = self.env['manifiesto.ambiental.residuo'].create({
+            residuo_vals = {
                 'manifiesto_id': manifiesto.id,
                 'product_id': linea.producto_id.id,
-                'nombre_residuo': linea.producto_id.name,
+                'nombre_residuo': linea.nombre_residuo or linea.producto_id.name,
                 'cantidad': linea.cantidad,
-                'clasificacion_corrosivo': getattr(linea.producto_id, 'clasificacion_corrosivo', False),
-                'clasificacion_reactivo': getattr(linea.producto_id, 'clasificacion_reactivo', False),
-                'clasificacion_explosivo': getattr(linea.producto_id, 'clasificacion_explosivo', False),
-                'clasificacion_toxico': getattr(linea.producto_id, 'clasificacion_toxico', False),
-                'clasificacion_inflamable': getattr(linea.producto_id, 'clasificacion_inflamable', False),
-                'clasificacion_biologico': getattr(linea.producto_id, 'clasificacion_biologico', False),
-                'envase_tipo': getattr(linea.producto_id, 'envase_tipo_default', ''),
-                'envase_capacidad': getattr(linea.producto_id, 'envase_capacidad_default', 0),
-                'etiqueta_si': True,
-                'etiqueta_no': False,
-            })
+                'residue_type': linea.residue_type or False,
+                'clasificacion_corrosivo': linea.clasificacion_corrosivo,
+                'clasificacion_reactivo': linea.clasificacion_reactivo,
+                'clasificacion_explosivo': linea.clasificacion_explosivo,
+                'clasificacion_toxico': linea.clasificacion_toxico,
+                'clasificacion_inflamable': linea.clasificacion_inflamable,
+                'clasificacion_biologico': linea.clasificacion_biologico,
+                'envase_tipo': linea.envase_tipo or False,
+                'envase_cantidad': linea.envase_cantidad or 1,
+                'envase_capacidad': linea.envase_capacidad or '',
+                'packaging_id': linea.packaging_id.id if linea.packaging_id else False,
+                'etiqueta_si': linea.etiqueta_si,
+                'etiqueta_no': linea.etiqueta_no,
+            }
+            residuo = self.env['manifiesto.ambiental.residuo'].create(residuo_vals)
             if linea.lote_id:
                 residuo.lot_id = linea.lote_id.id
         _logger.info(f"🎉 FIN CREACIÓN MANIFIESTO: {manifiesto.numero_manifiesto}")
@@ -382,11 +452,49 @@ class SalidaAcopioLinea(models.Model):
         store=True,
     )
 
+    # === Descripción del residuo ===
+    nombre_residuo = fields.Char(
+        string='Nombre del Residuo',
+        help='Descripción del residuo (se usa en el manifiesto)'
+    )
+
+    residue_type = fields.Selection(
+        RESIDUE_TYPE_SELECTION,
+        string='Tipo de Residuo'
+    )
+
+    # === Clasificación CRETIB ===
+    clasificacion_corrosivo = fields.Boolean(string='Corrosivo (C)')
+    clasificacion_reactivo = fields.Boolean(string='Reactivo (R)')
+    clasificacion_explosivo = fields.Boolean(string='Explosivo (E)')
+    clasificacion_toxico = fields.Boolean(string='Tóxico (T)')
+    clasificacion_inflamable = fields.Boolean(string='Inflamable (I)')
+    clasificacion_biologico = fields.Boolean(string='Biológico (B)')
+
     clasificaciones_cretib = fields.Char(
         string='Clasificaciones CRETIB',
         compute='_compute_clasificaciones_cretib',
-        readonly=True
+        store=True,
     )
+
+    # === Envase ===
+    envase_tipo = fields.Selection(
+        ENVASE_TIPO_SELECTION,
+        string='Tipo de Envase (Legacy)'
+    )
+    packaging_id = fields.Many2one('uom.uom', string='Embalaje')
+    envase_cantidad = fields.Integer(string='Unidades', default=1)
+    envase_capacidad = fields.Char(string='Capacidad')
+
+    # === Plan de Manejo ===
+    tipo_manejo_id = fields.Many2one(
+        'residuo.tipo.manejo',
+        string='Plan de Manejo'
+    )
+
+    # === Etiquetado ===
+    etiqueta_si = fields.Boolean(string='Etiqueta - Sí', default=True)
+    etiqueta_no = fields.Boolean(string='Etiqueta - No', default=False)
 
     def _get_location_acopio(self):
         return _find_location_acopio(self.env, self.env.company.id)
@@ -404,7 +512,6 @@ class SalidaAcopioLinea(models.Model):
             ('quantity', '>', 0),
         ])
         lot_ids = quants.filtered(lambda q: q.lot_id).mapped('lot_id').ids
-        _logger.info(f"[ACOPIO] Lotes disponibles para {self.producto_id.name}: {lot_ids}")
         return lot_ids
 
     @api.depends('producto_id', 'lote_id')
@@ -427,13 +534,76 @@ class SalidaAcopioLinea(models.Model):
             quants = self.env['stock.quant'].search(domain)
             record.stock_disponible = sum(quants.mapped('quantity'))
 
-    @api.depends('producto_id')
+    @api.depends(
+        'clasificacion_corrosivo', 'clasificacion_reactivo', 'clasificacion_explosivo',
+        'clasificacion_toxico', 'clasificacion_inflamable', 'clasificacion_biologico'
+    )
     def _compute_clasificaciones_cretib(self):
         for record in self:
-            if record.producto_id and hasattr(record.producto_id, 'get_clasificaciones_cretib'):
-                record.clasificaciones_cretib = record.producto_id.get_clasificaciones_cretib()
-            else:
-                record.clasificaciones_cretib = ''
+            tags = []
+            if record.clasificacion_corrosivo: tags.append('C')
+            if record.clasificacion_reactivo: tags.append('R')
+            if record.clasificacion_explosivo: tags.append('E')
+            if record.clasificacion_toxico: tags.append('T')
+            if record.clasificacion_inflamable: tags.append('I')
+            if record.clasificacion_biologico: tags.append('B')
+            record.clasificaciones_cretib = ', '.join(tags)
+
+    def _load_from_product(self):
+        """Carga valores por defecto desde el producto."""
+        prod = self.producto_id
+        if not prod:
+            return
+        self.nombre_residuo = prod.name
+        for f in ('clasificacion_corrosivo', 'clasificacion_reactivo',
+                  'clasificacion_explosivo', 'clasificacion_toxico',
+                  'clasificacion_inflamable', 'clasificacion_biologico'):
+            if hasattr(prod, f):
+                setattr(self, f, getattr(prod, f))
+        if hasattr(prod, 'envase_tipo_default'):
+            self.envase_tipo = prod.envase_tipo_default
+        if hasattr(prod, 'envase_capacidad_default') and prod.envase_capacidad_default:
+            self.envase_capacidad = str(prod.envase_capacidad_default)
+
+    def _load_from_lot(self):
+        """
+        Carga los datos del residuo desde el lote y/o del residuo del manifiesto
+        de entrada original (si existe), para evitar recapturar.
+        """
+        lot = self.lote_id
+        if not lot:
+            return
+
+        # 1. Clasificación y plan de manejo desde el lote (si los tiene)
+        cretib_fields = [
+            'clasificacion_corrosivo', 'clasificacion_reactivo',
+            'clasificacion_explosivo', 'clasificacion_toxico',
+            'clasificacion_inflamable', 'clasificacion_biologico',
+        ]
+        for f in cretib_fields:
+            if f in lot._fields:
+                setattr(self, f, getattr(lot, f))
+        if 'tipo_manejo_id' in lot._fields and lot.tipo_manejo_id:
+            self.tipo_manejo_id = lot.tipo_manejo_id.id
+
+        # 2. Datos del residuo del manifiesto de entrada (envase, cantidades, tipo)
+        residuo = self.env['manifiesto.ambiental.residuo'].search([
+            ('lot_id', '=', lot.id),
+            ('manifiesto_id.tipo_manifiesto', '=', 'entrada'),
+            ('manifiesto_id.is_current_version', '=', True),
+        ], limit=1, order='id desc')
+        if residuo:
+            if not self.nombre_residuo:
+                self.nombre_residuo = residuo.nombre_residuo
+            self.residue_type = residuo.residue_type or False
+            self.envase_tipo = residuo.envase_tipo or False
+            self.envase_cantidad = residuo.envase_cantidad or 1
+            self.envase_capacidad = residuo.envase_capacidad or ''
+            self.packaging_id = residuo.packaging_id.id if residuo.packaging_id else False
+            # CRETIB desde residuo si el lote no lo tuvo
+            for f in cretib_fields:
+                if not getattr(self, f) and getattr(residuo, f, False):
+                    setattr(self, f, True)
 
     @api.onchange('producto_id')
     def _onchange_producto_id(self):
@@ -441,6 +611,8 @@ class SalidaAcopioLinea(models.Model):
         self.cantidad = 0.0
         if not self.producto_id:
             return {'domain': {'lote_id': [('id', '=', False)]}}
+        # Cargar defaults del producto
+        self._load_from_product()
         lot_ids = self._get_lot_ids_in_acopio()
         return {'domain': {'lote_id': [('id', 'in', lot_ids)]}}
 
@@ -450,19 +622,31 @@ class SalidaAcopioLinea(models.Model):
             if not self.lote_id:
                 self.cantidad = 0.0
             return
+        # Calcular stock disponible
         location_acopio = self._get_location_acopio()
-        if not location_acopio:
-            return
-        quants = self.env['stock.quant'].search([
-            ('product_id', '=', self.producto_id.id),
-            ('location_id', '=', location_acopio.id),
-            ('lot_id', '=', self.lote_id.id),
-            ('quantity', '>', 0),
-        ])
-        disponible = sum(quants.mapped('quantity'))
-        self.stock_disponible = disponible
-        if disponible > 0:
-            self.cantidad = disponible
+        if location_acopio:
+            quants = self.env['stock.quant'].search([
+                ('product_id', '=', self.producto_id.id),
+                ('location_id', '=', location_acopio.id),
+                ('lot_id', '=', self.lote_id.id),
+                ('quantity', '>', 0),
+            ])
+            disponible = sum(quants.mapped('quantity'))
+            self.stock_disponible = disponible
+            if disponible > 0 and self.cantidad == 0.0:
+                self.cantidad = disponible
+        # Precargar datos ambientales
+        self._load_from_lot()
+
+    @api.onchange('etiqueta_si')
+    def _onchange_etiqueta_si(self):
+        if self.etiqueta_si:
+            self.etiqueta_no = False
+
+    @api.onchange('etiqueta_no')
+    def _onchange_etiqueta_no(self):
+        if self.etiqueta_no:
+            self.etiqueta_si = False
 
     @api.constrains('cantidad', 'stock_disponible')
     def _check_cantidad_disponible(self):

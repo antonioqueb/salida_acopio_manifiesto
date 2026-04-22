@@ -8,16 +8,17 @@
                 <div class="alert alert-warning" style="margin-bottom: 20px;">
                     <h4><strong>📤 Salida de Acopio del Inventario</strong></h4>
                     <p>
-                        Se van a dar de salida residuos desde la ubicación "Acopio" del inventario 
+                        Se van a dar de salida residuos desde la ubicación "Acopio" del inventario
                         y se generará automáticamente un manifiesto ambiental donde <strong>SAI es el generador</strong>.
+                        Al seleccionar un lote, los datos de clasificación y plan de manejo se precargan automáticamente.
                     </p>
                 </div>
 
                 <group string="Información del Transporte" col="2">
-                    <field name="transportista_id" 
+                    <field name="transportista_id"
                            placeholder="Transportista (SAI por defecto)..."
                            options="{'no_create': True}"/>
-                    <field name="destinatario_id" 
+                    <field name="destinatario_id"
                            placeholder="Seleccione el destinatario final..."
                            options="{'no_create': True}"/>
                 </group>
@@ -30,61 +31,94 @@
                 <group string="Residuos a Dar de Salida">
                     <field name="linea_ids" nolabel="1">
                         <list editable="bottom" string="Residuos">
-                            <field name="producto_id" 
+                            <field name="producto_id"
                                    domain="[('type', '!=', 'service')]"
-                                   placeholder="Seleccione producto con stock en Acopio..."
                                    options="{'no_create': True}"/>
-                            <field name="lote_id" 
+                            <field name="lote_id"
                                    domain="[('product_id', '=', producto_id)]"
                                    options="{'no_create': True}"/>
+                            <field name="nombre_residuo"/>
                             <field name="stock_disponible" readonly="1"/>
-                            <field name="cantidad" 
+                            <field name="cantidad"
                                    decoration-bf="cantidad > stock_disponible"
                                    decoration-danger="cantidad > stock_disponible"/>
-                            <field name="clasificaciones_cretib" readonly="1" optional="show"/>
+                            <field name="clasificaciones_cretib" readonly="1"/>
+                            <field name="tipo_manejo_id" optional="show"/>
+                            <field name="envase_cantidad" optional="hide"/>
+                            <field name="packaging_id" optional="hide"/>
+                            <field name="envase_capacidad" optional="hide"/>
+                            <field name="residue_type" optional="hide"/>
                         </list>
-                        <form string="Línea de Residuo">
-                            <group col="2">
-                                <field name="producto_id" 
-                                       domain="[('type', '!=', 'service')]"
-                                       placeholder="Seleccione producto con stock en Acopio..."
-                                       options="{'no_create': True}"/>
-                                <field name="lote_id" 
-                                       domain="[('product_id', '=', producto_id)]"
-                                       options="{'no_create': True}"/>
-                                <field name="stock_disponible" readonly="1"/>
-                                <field name="cantidad"/>
-                                <field name="clasificaciones_cretib" readonly="1"/>
-                            </group>
+                        <form string="Detalle del Residuo">
+                            <sheet>
+                                <group col="2">
+                                    <group string="Producto y Lote">
+                                        <field name="producto_id"
+                                               domain="[('type', '!=', 'service')]"
+                                               options="{'no_create': True}"/>
+                                        <field name="lote_id"
+                                               domain="[('product_id', '=', producto_id)]"
+                                               options="{'no_create': True}"/>
+                                        <field name="stock_disponible" readonly="1"/>
+                                        <field name="cantidad"/>
+                                    </group>
+                                    <group string="Identificación del Residuo">
+                                        <field name="nombre_residuo"/>
+                                        <field name="residue_type"/>
+                                        <field name="tipo_manejo_id"
+                                               options="{'no_create': True}"/>
+                                    </group>
+                                </group>
+
+                                <group string="Clasificación CRETIB" col="6">
+                                    <field name="clasificacion_corrosivo"/>
+                                    <field name="clasificacion_reactivo"/>
+                                    <field name="clasificacion_explosivo"/>
+                                    <field name="clasificacion_toxico"/>
+                                    <field name="clasificacion_inflamable"/>
+                                    <field name="clasificacion_biologico"/>
+                                </group>
+
+                                <group string="Envase" col="4">
+                                    <field name="envase_cantidad" string="Unidades"/>
+                                    <field name="packaging_id" string="Embalaje"/>
+                                    <field name="envase_tipo" string="Tipo (Legacy)"/>
+                                    <field name="envase_capacidad"/>
+                                </group>
+
+                                <group string="Etiquetado" col="2">
+                                    <field name="etiqueta_si"/>
+                                    <field name="etiqueta_no"/>
+                                </group>
+                            </sheet>
                         </form>
                     </field>
                 </group>
 
                 <group string="Observaciones">
-                    <field name="observaciones" 
-                           nolabel="1" 
+                    <field name="observaciones"
+                           nolabel="1"
                            placeholder="Observaciones adicionales para la salida y el manifiesto..."/>
                 </group>
 
                 <div class="alert alert-info" style="margin-top: 15px;">
-                    <strong>ℹ️ Información importante:</strong>
+                    <strong>ℹ️ Flujo automatizado:</strong>
                     <ul style="margin: 5px 0;">
-                        <li>Solo se muestran productos (no servicios) que tienen stock en la ubicación "Acopio"</li>
-                        <li>Para productos con seguimiento por lotes, debe seleccionar un lote específico</li>
-                        <li>Se verificará que haya stock suficiente antes de confirmar</li>
-                        <li>Se generará automáticamente un manifiesto donde SAI aparece como generador</li>
-                        <li>Esta operación creará movimientos de inventario de salida</li>
+                        <li>Al seleccionar un lote, sus datos CRETIB y plan de manejo se precargan automáticamente</li>
+                        <li>Los datos capturados aquí se propagan al manifiesto de salida Y al historial de movimientos</li>
+                        <li>El manifiesto generado quedará en estado "Confirmado" listo para completar datos administrativos</li>
+                        <li>Se crea automáticamente el movimiento de inventario de egreso</li>
                     </ul>
                 </div>
 
                 <footer>
-                    <button string="✅ Confirmar Salida" 
-                            name="action_confirmar_salida" 
-                            type="object" 
+                    <button string="✅ Confirmar Salida"
+                            name="action_confirmar_salida"
+                            type="object"
                             class="btn-primary"
                             confirm="¿Está seguro de que desea realizar la salida de acopio? Se crearán movimientos de inventario y un manifiesto ambiental."/>
-                    <button string="Cancelar" 
-                            class="btn-secondary" 
+                    <button string="Cancelar"
+                            class="btn-secondary"
                             special="cancel"/>
                 </footer>
             </form>

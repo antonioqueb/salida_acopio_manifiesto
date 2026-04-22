@@ -140,22 +140,58 @@
                                     <field name="lote_id"
                                            domain="[('product_id', '=', producto_id)]"
                                            options="{'no_create': True}"/>
+                                    <field name="nombre_residuo"/>
                                     <field name="stock_disponible" readonly="1"/>
                                     <field name="cantidad"/>
                                     <field name="clasificaciones_cretib" readonly="1"/>
+                                    <field name="tipo_manejo_id" optional="show"/>
+                                    <field name="envase_cantidad" optional="hide"/>
+                                    <field name="packaging_id" optional="hide"/>
+                                    <field name="envase_capacidad" optional="hide"/>
+                                    <field name="residue_type" optional="hide"/>
                                 </list>
-                                <form string="Línea de Salida">
-                                    <group col="2">
-                                        <field name="producto_id"
-                                               domain="[('type', '!=', 'service')]"
-                                               options="{'no_create': True}"/>
-                                        <field name="lote_id"
-                                               domain="[('product_id', '=', producto_id)]"
-                                               options="{'no_create': True}"/>
-                                        <field name="stock_disponible" readonly="1"/>
-                                        <field name="cantidad"/>
-                                        <field name="clasificaciones_cretib" readonly="1"/>
-                                    </group>
+                                <form string="Detalle de Línea de Salida">
+                                    <sheet>
+                                        <group col="2">
+                                            <group string="Producto y Lote">
+                                                <field name="producto_id"
+                                                       domain="[('type', '!=', 'service')]"
+                                                       options="{'no_create': True}"/>
+                                                <field name="lote_id"
+                                                       domain="[('product_id', '=', producto_id)]"
+                                                       options="{'no_create': True}"/>
+                                                <field name="stock_disponible" readonly="1"/>
+                                                <field name="cantidad"/>
+                                            </group>
+                                            <group string="Identificación del Residuo">
+                                                <field name="nombre_residuo"/>
+                                                <field name="residue_type"/>
+                                                <field name="tipo_manejo_id"
+                                                       options="{'no_create': True}"/>
+                                            </group>
+                                        </group>
+
+                                        <group string="Clasificación CRETIB" col="6">
+                                            <field name="clasificacion_corrosivo"/>
+                                            <field name="clasificacion_reactivo"/>
+                                            <field name="clasificacion_explosivo"/>
+                                            <field name="clasificacion_toxico"/>
+                                            <field name="clasificacion_inflamable"/>
+                                            <field name="clasificacion_biologico"/>
+                                        </group>
+
+                                        <group string="Envase" col="4">
+                                            <field name="envase_cantidad" string="Unidades"/>
+                                            <field name="packaging_id" string="Embalaje"/>
+                                            <field name="envase_tipo" string="Tipo (Legacy)"/>
+                                            <field name="envase_capacidad"/>
+                                        </group>
+
+                                        <group string="Etiquetado" col="2">
+                                            <field name="etiqueta_si"/>
+                                            <field name="etiqueta_no"/>
+                                        </group>
+                                    </sheet>
                                 </form>
                             </field>
                         </page>
@@ -192,11 +228,11 @@
                         domain="[('fecha_salida', '&gt;=', (context_today() - datetime.timedelta(days=7)).strftime('%Y-%m-%d'))]"/>
                 <filter string="Este Mes" name="this_month"
                         domain="[('fecha_salida', '&gt;=', context_today().strftime('%Y-%m-01'))]"/>
-                    <filter string="Estado" name="group_state" context="{'group_by':'state'}"/>
-                    <filter string="Transportista" name="group_transportista" context="{'group_by':'transportista_id'}"/>
-                    <filter string="Destinatario" name="group_destinatario" context="{'group_by':'destinatario_id'}"/>
-                    <filter string="Usuario" name="group_user" context="{'group_by':'usuario_salida'}"/>
-                    <filter string="Fecha" name="group_date" context="{'group_by':'fecha_salida:day'}"/>
+                <filter string="Estado" name="group_state" context="{'group_by':'state'}"/>
+                <filter string="Transportista" name="group_transportista" context="{'group_by':'transportista_id'}"/>
+                <filter string="Destinatario" name="group_destinatario" context="{'group_by':'destinatario_id'}"/>
+                <filter string="Usuario" name="group_user" context="{'group_by':'usuario_salida'}"/>
+                <filter string="Fecha" name="group_date" context="{'group_by':'fecha_salida:day'}"/>
             </search>
         </field>
     </record>
