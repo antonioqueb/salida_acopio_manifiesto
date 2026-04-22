@@ -158,8 +158,8 @@
                         <!-- 5. IDENTIFICACIÓN DE LOS RESIDUOS -->
                         <table>
                             <colgroup>
-                                <col style="width:18%"/>
-                                <col style="width:22%"/>
+                                <col style="width:16%"/>
+                                <col style="width:20%"/>
                                 <col style="width:3%"/>
                                 <col style="width:3%"/>
                                 <col style="width:3%"/>
@@ -167,21 +167,22 @@
                                 <col style="width:3%"/>
                                 <col style="width:3%"/>
                                 <col style="width:3%"/>
-                                <col style="width:10%"/>
+                                <col style="width:5%"/>
+                                <col style="width:9%"/>
                                 <col style="width:7%"/>
-                                <col style="width:12%"/>
+                                <col style="width:14%"/>
                                 <col style="width:4%"/>
                                 <col style="width:4%"/>
                             </colgroup>
 
                             <tr>
-                                <th colspan="14" class="header-table">5. Identificación de los residuos</th>
+                                <th colspan="15" class="header-table">5. Identificación de los residuos</th>
                             </tr>
                             <tr>
                                 <th class="header-table">Núm. de manifiesto</th>
                                 <th class="header-table">Nombre del residuo</th>
                                 <th class="header-table" colspan="7">Clasificación</th>
-                                <th class="header-table" colspan="2">Envase</th>
+                                <th class="header-table" colspan="3">Envase</th>
                                 <th class="header-table">Cantidad (kg o ton)</th>
                                 <th class="header-table" colspan="2">Etiqueta</th>
                             </tr>
@@ -195,6 +196,7 @@
                                 <th class="header-table">I</th>
                                 <th class="header-table">B</th>
                                 <th class="header-table">M</th>
+                                <th class="header-table">Pzas</th>
                                 <th class="header-table">Tipo</th>
                                 <th class="header-table">Capacidad</th>
                                 <th class="header-table"></th>
@@ -220,6 +222,7 @@
                                     <td class="center-text"><span t-if="residuo.clasificacion_inflamable">X</span></td>
                                     <td class="center-text"><span t-if="residuo.clasificacion_biologico">X</span></td>
                                     <td class="center-text"></td>
+                                    <td class="center-text"><span t-field="residuo.envase_cantidad"/></td>
                                     <td class="center-text">
                                         <span t-if="residuo.packaging_id" t-field="residuo.packaging_id.name"/>
                                         <span t-elif="residuo.envase_tipo" t-field="residuo.envase_tipo"/>
@@ -236,6 +239,7 @@
                             <t t-set="empty_rows" t-value="max(0, min_rows - residuos_count)"/>
                             <t t-foreach="range(empty_rows)" t-as="empty_row">
                                 <tr style="height: 22px;">
+                                    <td>&#160;</td>
                                     <td>&#160;</td>
                                     <td>&#160;</td>
                                     <td>&#160;</td>
