@@ -7,7 +7,6 @@ _logger = logging.getLogger(__name__)
 
 
 def _find_location_acopio(env, company_id=None):
-    """Busca la ubicación Acopio de forma flexible por complete_name."""
     domain = [
         ('complete_name', 'ilike', 'Acopio'),
         ('usage', '=', 'internal'),
@@ -48,7 +47,6 @@ class SalidaAcopioWizard(models.TransientModel):
         domain=[('is_company', '=', True)],
         default=lambda self: self._get_sai_partner(),
         required=True,
-        help='Empresa transportista (SAI por defecto)'
     )
 
     destinatario_id = fields.Many2one(
@@ -56,7 +54,6 @@ class SalidaAcopioWizard(models.TransientModel):
         string='Destinatario Final',
         domain=[('is_company', '=', True)],
         required=True,
-        help='Empresa destinataria final de los residuos'
     )
 
     linea_ids = fields.One2many(
@@ -75,9 +72,7 @@ class SalidaAcopioWizard(models.TransientModel):
         compute='_compute_totales'
     )
 
-    observaciones = fields.Text(
-        string='Observaciones'
-    )
+    observaciones = fields.Text(string='Observaciones')
 
     def _get_sai_partner(self):
         sai_partner = self.env['res.partner'].search([
@@ -105,6 +100,43 @@ class SalidaAcopioWizard(models.TransientModel):
             record.total_residuos = len(record.linea_ids)
             record.cantidad_total = sum(record.linea_ids.mapped('cantidad'))
 
+    def _validate_no_duplicates(self):
+        """Valida duplicados de lote dentro del wizard antes de crear la salida."""
+        seen = {}
+        for linea in self.linea_ids:
+            if linea.lote_id:
+                key = ('lot', linea.lote_id.id)
+                label = f"Producto: {linea.producto_id.name} / Lote: {linea.lote_id.name}"
+            else:
+                key = ('prod', linea.producto_id.id)
+                label = f"Producto: {linea.producto_id.name} (sin lote)"
+            if key in seen:
+                raise UserError(
+                    f"⚠️ Residuo duplicado en la salida:\n\n{label}\n\n"
+                    f"Cada lote solo puede aparecer una vez. "
+                    f"Elimine la línea duplicada antes de continuar."
+                )
+            seen[key] = True
+
+    def _validate_lotes_no_usados(self):
+        """Valida que los lotes no estén ya en otra salida (done o draft)."""
+        for linea in self.linea_ids:
+            if not linea.lote_id:
+                continue
+            otras = self.env['salida.acopio.linea'].search([
+                ('lote_id', '=', linea.lote_id.id),
+                ('salida_id.state', 'in', ('draft', 'done')),
+            ], limit=1)
+            if otras:
+                estado = 'ya entregado en' if otras.salida_id.state == 'done' else 'reservado en borrador en'
+                raise UserError(
+                    f"⚠️ Lote no disponible:\n\n"
+                    f"El lote '{linea.lote_id.name}' del producto "
+                    f"'{linea.producto_id.name}' está {estado} la salida "
+                    f"'{otras.salida_id.numero_referencia}'.\n\n"
+                    f"No es posible volver a darle salida."
+                )
+
     def action_confirmar_salida(self):
         self.ensure_one()
         if not self.linea_ids:
@@ -113,6 +145,10 @@ class SalidaAcopioWizard(models.TransientModel):
             raise UserError("Debe seleccionar un transportista.")
         if not self.destinatario_id:
             raise UserError("Debe seleccionar un destinatario final.")
+
+        # === VALIDACIONES de duplicados y lotes ya usados ===
+        self._validate_no_duplicates()
+        self._validate_lotes_no_usados()
 
         lineas_data = []
         for linea in self.linea_ids:
@@ -195,13 +231,19 @@ class SalidaAcopioWizardLinea(models.TransientModel):
         'product.product',
         string='Producto/Residuo',
         required=True,
-        help='Producto disponible en la ubicación Acopio'
     )
 
     lote_id = fields.Many2one(
         'stock.lot',
         string='Lote',
-        help='Lote específico del producto'
+    )
+
+    # === DOMINIO DINÁMICO PARA EL DROPDOWN DE LOTES ===
+    available_lot_ids = fields.Many2many(
+        'stock.lot',
+        string='Lotes Disponibles',
+        compute='_compute_available_lot_ids',
+        help='Lotes con stock en Acopio, excluyendo los ya seleccionados en este wizard y los ya usados en otras salidas'
     )
 
     cantidad = fields.Float(
@@ -214,21 +256,12 @@ class SalidaAcopioWizardLinea(models.TransientModel):
     stock_disponible = fields.Float(
         string='Stock Disponible (kg)',
         compute='_compute_stock_disponible',
-        help='Cantidad disponible en la ubicación Acopio'
     )
 
-    # === Descripción del residuo ===
-    nombre_residuo = fields.Char(
-        string='Nombre del Residuo',
-        help='Descripción del residuo (se usa en el manifiesto)'
-    )
+    nombre_residuo = fields.Char(string='Nombre del Residuo')
 
-    residue_type = fields.Selection(
-        RESIDUE_TYPE_SELECTION,
-        string='Tipo de Residuo'
-    )
+    residue_type = fields.Selection(RESIDUE_TYPE_SELECTION, string='Tipo de Residuo')
 
-    # === Clasificación CRETIB ===
     clasificacion_corrosivo = fields.Boolean(string='Corrosivo (C)')
     clasificacion_reactivo = fields.Boolean(string='Reactivo (R)')
     clasificacion_explosivo = fields.Boolean(string='Explosivo (E)')
@@ -241,43 +274,63 @@ class SalidaAcopioWizardLinea(models.TransientModel):
         compute='_compute_clasificaciones_cretib',
     )
 
-    # === Envase ===
-    envase_tipo = fields.Selection(
-        ENVASE_TIPO_SELECTION,
-        string='Tipo de Envase (Legacy)'
-    )
+    envase_tipo = fields.Selection(ENVASE_TIPO_SELECTION, string='Tipo de Envase (Legacy)')
     packaging_id = fields.Many2one('uom.uom', string='Embalaje')
     envase_cantidad = fields.Integer(string='Unidades', default=1)
     envase_capacidad = fields.Char(string='Capacidad')
 
-    # === Plan de Manejo ===
-    tipo_manejo_id = fields.Many2one(
-        'residuo.tipo.manejo',
-        string='Plan de Manejo'
-    )
+    tipo_manejo_id = fields.Many2one('residuo.tipo.manejo', string='Plan de Manejo')
 
-    # === Etiquetado ===
     etiqueta_si = fields.Boolean(string='Etiqueta - Sí', default=True)
     etiqueta_no = fields.Boolean(string='Etiqueta - No', default=False)
 
     def _get_location_acopio(self):
         return _find_location_acopio(self.env, self.env.company.id)
 
-    def _get_lot_ids_in_acopio(self):
-        """Retorna los IDs de lotes con stock > 0 en Acopio para el producto actual."""
+    def _get_lots_with_stock_in_acopio(self):
         if not self.producto_id:
-            return []
+            return self.env['stock.lot']
         location_acopio = self._get_location_acopio()
         if not location_acopio:
-            return []
+            return self.env['stock.lot']
         quants = self.env['stock.quant'].search([
             ('product_id', '=', self.producto_id.id),
             ('location_id', '=', location_acopio.id),
             ('quantity', '>', 0),
         ])
-        lot_ids = quants.filtered(lambda q: q.lot_id).mapped('lot_id').ids
-        _logger.info(f"[ACOPIO WIZARD] Lotes disponibles para {self.producto_id.name}: {lot_ids}")
-        return lot_ids
+        return quants.mapped('lot_id')
+
+    @api.depends('producto_id', 'wizard_id.linea_ids.lote_id', 'wizard_id.linea_ids.producto_id')
+    def _compute_available_lot_ids(self):
+        for record in self:
+            if not record.producto_id:
+                record.available_lot_ids = [(5, 0, 0)]
+                continue
+
+            # 1. Lotes con stock en Acopio
+            stock_lots = record._get_lots_with_stock_in_acopio()
+            available_ids = set(stock_lots.ids)
+
+            # 2. Excluir lotes ya seleccionados en OTRAS líneas del mismo wizard
+            if record.wizard_id:
+                used_in_same_wizard = record.wizard_id.linea_ids.filtered(
+                    lambda l: l.id != record.id and l.lote_id
+                ).mapped('lote_id').ids
+                available_ids -= set(used_in_same_wizard)
+
+            # 3. Excluir lotes ya usados en otras salidas (done o draft)
+            if available_ids:
+                ya_usados = record.env['salida.acopio.linea'].search([
+                    ('lote_id', 'in', list(available_ids)),
+                    ('salida_id.state', 'in', ('draft', 'done')),
+                ]).mapped('lote_id').ids
+                available_ids -= set(ya_usados)
+
+            # 4. Mantener visible el lote actualmente seleccionado en esta línea
+            if record.lote_id:
+                available_ids.add(record.lote_id.id)
+
+            record.available_lot_ids = [(6, 0, list(available_ids))]
 
     @api.depends('producto_id', 'lote_id')
     def _compute_stock_disponible(self):
@@ -315,7 +368,6 @@ class SalidaAcopioWizardLinea(models.TransientModel):
             record.clasificaciones_cretib = ', '.join(tags)
 
     def _load_from_product(self):
-        """Carga valores por defecto desde el producto."""
         prod = self.producto_id
         if not prod:
             return
@@ -331,10 +383,6 @@ class SalidaAcopioWizardLinea(models.TransientModel):
             self.envase_capacidad = str(prod.envase_capacidad_default)
 
     def _load_from_lot(self):
-        """
-        Carga los datos del residuo desde el lote y/o del residuo del manifiesto
-        de entrada original (si existe), para evitar recapturar.
-        """
         lot = self.lote_id
         if not lot:
             return
@@ -372,10 +420,8 @@ class SalidaAcopioWizardLinea(models.TransientModel):
         self.lote_id = False
         self.cantidad = 0.0
         if not self.producto_id:
-            return {'domain': {'lote_id': [('id', '=', False)]}}
+            return
         self._load_from_product()
-        lot_ids = self._get_lot_ids_in_acopio()
-        return {'domain': {'lote_id': [('id', 'in', lot_ids)]}}
 
     @api.onchange('lote_id')
     def _onchange_lote_id(self):
@@ -383,6 +429,48 @@ class SalidaAcopioWizardLinea(models.TransientModel):
             if not self.lote_id:
                 self.cantidad = 0.0
             return
+
+        # === VALIDACIÓN INMEDIATA: lote duplicado en el mismo wizard ===
+        if self.wizard_id:
+            otras_lineas = self.wizard_id.linea_ids.filtered(
+                lambda l: l.id != self.id and l.lote_id and l.lote_id.id == self.lote_id.id
+            )
+            if otras_lineas:
+                lote_name = self.lote_id.name
+                self.lote_id = False
+                self.cantidad = 0.0
+                return {
+                    'warning': {
+                        'title': '⚠️ Lote duplicado',
+                        'message': (
+                            f'El lote "{lote_name}" ya está seleccionado en otra línea '
+                            f'de esta misma salida. Cada lote solo puede aparecer una vez.'
+                        )
+                    }
+                }
+
+        # === VALIDACIÓN: lote ya usado en otra salida ===
+        otras = self.env['salida.acopio.linea'].search([
+            ('lote_id', '=', self.lote_id.id),
+            ('salida_id.state', 'in', ('draft', 'done')),
+        ], limit=1)
+        if otras:
+            estado = 'ya entregado en' if otras.salida_id.state == 'done' else 'reservado en borrador en'
+            lote_name = self.lote_id.name
+            ref = otras.salida_id.numero_referencia
+            self.lote_id = False
+            self.cantidad = 0.0
+            return {
+                'warning': {
+                    'title': '⚠️ Lote no disponible',
+                    'message': (
+                        f'El lote "{lote_name}" está {estado} la salida "{ref}".\n\n'
+                        f'No es posible volver a seleccionarlo.'
+                    )
+                }
+            }
+
+        # Calcular stock disponible y precargar datos
         location_acopio = self._get_location_acopio()
         if location_acopio:
             quants = self.env['stock.quant'].search([
@@ -434,3 +522,21 @@ class SalidaAcopioWizardLinea(models.TransientModel):
         for record in self:
             if record.cantidad <= 0:
                 raise ValidationError("La cantidad debe ser mayor a cero.")
+
+    @api.constrains('lote_id', 'wizard_id')
+    def _check_lote_unico_en_wizard(self):
+        """Constraint dura: el mismo lote no puede repetirse en el mismo wizard."""
+        for record in self:
+            if not record.lote_id or not record.wizard_id:
+                continue
+            duplicados = record.wizard_id.linea_ids.filtered(
+                lambda l: l.id != record.id
+                and l.lote_id
+                and l.lote_id.id == record.lote_id.id
+            )
+            if duplicados:
+                raise ValidationError(
+                    f"⚠️ El lote '{record.lote_id.name}' (producto '{record.producto_id.name}') "
+                    f"ya está incluido en otra línea de esta salida. "
+                    f"Cada lote solo puede aparecer una vez."
+                )

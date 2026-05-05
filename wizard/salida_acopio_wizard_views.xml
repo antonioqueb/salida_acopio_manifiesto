@@ -34,9 +34,10 @@
                             <field name="producto_id"
                                    domain="[('type', '!=', 'service')]"
                                    options="{'no_create': True}"/>
+                            <field name="available_lot_ids" column_invisible="1"/>
                             <field name="lote_id"
-                                   domain="[('product_id', '=', producto_id)]"
-                                   options="{'no_create': True}"/>
+                                   domain="[('id', 'in', available_lot_ids)]"
+                                   options="{'no_create': True, 'no_open': True}"/>
                             <field name="nombre_residuo"/>
                             <field name="stock_disponible" readonly="1"/>
                             <field name="cantidad"
@@ -56,9 +57,10 @@
                                         <field name="producto_id"
                                                domain="[('type', '!=', 'service')]"
                                                options="{'no_create': True}"/>
+                                        <field name="available_lot_ids" invisible="1"/>
                                         <field name="lote_id"
-                                               domain="[('product_id', '=', producto_id)]"
-                                               options="{'no_create': True}"/>
+                                               domain="[('id', 'in', available_lot_ids)]"
+                                               options="{'no_create': True, 'no_open': True}"/>
                                         <field name="stock_disponible" readonly="1"/>
                                         <field name="cantidad"/>
                                     </group>
@@ -102,12 +104,12 @@
                 </group>
 
                 <div class="alert alert-info" style="margin-top: 15px;">
-                    <strong>ℹ️ Flujo automatizado:</strong>
+                    <strong>ℹ️ Validaciones automáticas:</strong>
                     <ul style="margin: 5px 0;">
+                        <li>El selector de lotes solo muestra lotes con stock en Acopio</li>
+                        <li>No se pueden seleccionar lotes ya entregados o reservados en otras salidas</li>
+                        <li>No se puede repetir el mismo lote en dos líneas de la misma salida</li>
                         <li>Al seleccionar un lote, sus datos CRETIB y plan de manejo se precargan automáticamente</li>
-                        <li>Los datos capturados aquí se propagan al manifiesto de salida Y al historial de movimientos</li>
-                        <li>El manifiesto generado quedará en estado "Confirmado" listo para completar datos administrativos</li>
-                        <li>Se crea automáticamente el movimiento de inventario de egreso</li>
                     </ul>
                 </div>
 
