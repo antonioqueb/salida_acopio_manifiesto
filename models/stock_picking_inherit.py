@@ -19,6 +19,7 @@ class StockPicking(models.Model):
     chofer_id = fields.Many2one(
         'res.partner',
         string='Chofer',
+        domain=[('is_driver', '=', True)],
         help='Operador / chofer del vehículo'
     )
 
@@ -69,6 +70,7 @@ class StockMove(models.Model):
     chofer_id = fields.Many2one(
         'res.partner',
         string='Chofer',
+        domain=[('is_driver', '=', True)],
         help='Operador / chofer del vehículo'
     )
 

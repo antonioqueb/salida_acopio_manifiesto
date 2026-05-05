@@ -12,7 +12,13 @@
     ''',
     'author': 'Alphaqueb Consulting',
     'website': 'https://alphaqueb.com',
-    'depends': ['base', 'stock', 'fleet', 'manifiesto_ambiental'],
+    'depends': [
+        'base',
+        'stock',
+        'fleet',
+        'service_order_planning_fleet',
+        'manifiesto_ambiental',
+    ],
     'data': [
         'security/ir.model.access.csv',
         'data/stock_data.xml',

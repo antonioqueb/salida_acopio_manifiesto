@@ -83,7 +83,8 @@ class SalidaAcopio(models.Model):
     chofer_id = fields.Many2one(
         'res.partner',
         string='Chofer',
-        help='Operador / chofer del vehículo. Se busca del catálogo de contactos.'
+        domain=[('is_driver', '=', True)],
+        help='Operador / chofer del vehículo. Solo muestra contactos marcados como "Es Chofer".'
     )
 
     vehicle_id = fields.Many2one(
