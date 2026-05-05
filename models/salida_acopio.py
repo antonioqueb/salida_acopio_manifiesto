@@ -289,6 +289,17 @@ class SalidaAcopio(models.Model):
                 except Exception as e:
                     _logger.warning(f"No se pudo sincronizar datos al lote {lot.name}: {e}")
 
+    def _build_move_description(self, linea):
+        """Construye la descripción del move incluyendo CRETIB y plan de manejo."""
+        parts = [linea.nombre_residuo or linea.producto_id.display_name]
+        if linea.clasificaciones_cretib:
+            parts.append(f"CRETIB: {linea.clasificaciones_cretib}")
+        if linea.lote_id:
+            parts.append(f"Lote: {linea.lote_id.name}")
+        if linea.tipo_manejo_id:
+            parts.append(f"Plan de Manejo: {linea.tipo_manejo_id.name}")
+        return "\n".join(parts)
+
     def _create_stock_picking(self):
         location_acopio = self._get_location_acopio()
         location_customer = self.env.ref('stock.stock_location_customers')
@@ -313,7 +324,7 @@ class SalidaAcopio(models.Model):
         })
         _logger.info(f"[ACOPIO] Picking creado: {picking.id} - {picking.name}")
 
-        # PASO 2: Crear cada move INDIVIDUALMENTE
+        # PASO 2: Crear cada move INDIVIDUALMENTE con CRETIB y vínculo a la línea
         moves_created = []
         for idx, linea in enumerate(self.linea_ids, start=1):
             _logger.info(f"[ACOPIO] PASO 2.{idx}: creando move para {linea.producto_id.name}")
@@ -325,7 +336,14 @@ class SalidaAcopio(models.Model):
                 'location_id': location_acopio.id,
                 'location_dest_id': location_customer.id,
                 'company_id': self.company_id.id,
-                'description_picking': linea.nombre_residuo or linea.producto_id.display_name,
+                'description_picking': self._build_move_description(linea),
+                'salida_acopio_linea_id': linea.id,
+                'clasificacion_corrosivo': linea.clasificacion_corrosivo,
+                'clasificacion_reactivo': linea.clasificacion_reactivo,
+                'clasificacion_explosivo': linea.clasificacion_explosivo,
+                'clasificacion_toxico': linea.clasificacion_toxico,
+                'clasificacion_inflamable': linea.clasificacion_inflamable,
+                'clasificacion_biologico': linea.clasificacion_biologico,
             }
             move = self.env['stock.move'].create(move_vals)
             _logger.info(f"[ACOPIO] Move creado: {move.id}")
@@ -340,7 +358,6 @@ class SalidaAcopio(models.Model):
         for idx, (move, linea) in enumerate(moves_created, start=1):
             _logger.info(f"[ACOPIO] PASO 4.{idx}: asignando lote/cantidad a move {move.id}")
             if linea.lote_id:
-                # Eliminar move_lines reservadas y crear con el lote correcto
                 move.move_line_ids.unlink()
                 self.env['stock.move.line'].create({
                     'move_id': move.id,
@@ -365,6 +382,18 @@ class SalidaAcopio(models.Model):
                         'location_id': location_acopio.id,
                         'location_dest_id': location_customer.id,
                     })
+
+        # PASO 4.5: Re-escribir CRETIB en los moves por si el flujo de assign los pisó
+        for move, linea in moves_created:
+            move.write({
+                'clasificacion_corrosivo': linea.clasificacion_corrosivo,
+                'clasificacion_reactivo': linea.clasificacion_reactivo,
+                'clasificacion_explosivo': linea.clasificacion_explosivo,
+                'clasificacion_toxico': linea.clasificacion_toxico,
+                'clasificacion_inflamable': linea.clasificacion_inflamable,
+                'clasificacion_biologico': linea.clasificacion_biologico,
+                'description_picking': self._build_move_description(linea),
+            })
 
         # PASO 5: Marcar picked (Odoo 17+)
         _logger.info("[ACOPIO] PASO 5: marcando moves como picked")
@@ -459,15 +488,10 @@ class SalidaAcopio(models.Model):
             residuo_vals = {
                 'manifiesto_id': manifiesto.id,
                 'product_id': linea.producto_id.id,
+                'lot_id': linea.lote_id.id if linea.lote_id else False,
                 'nombre_residuo': linea.nombre_residuo or linea.producto_id.name,
                 'cantidad': linea.cantidad,
                 'residue_type': linea.residue_type or False,
-                'clasificacion_corrosivo': linea.clasificacion_corrosivo,
-                'clasificacion_reactivo': linea.clasificacion_reactivo,
-                'clasificacion_explosivo': linea.clasificacion_explosivo,
-                'clasificacion_toxico': linea.clasificacion_toxico,
-                'clasificacion_inflamable': linea.clasificacion_inflamable,
-                'clasificacion_biologico': linea.clasificacion_biologico,
                 'envase_tipo': linea.envase_tipo or False,
                 'envase_cantidad': linea.envase_cantidad or 1,
                 'envase_capacidad': linea.envase_capacidad or '',
@@ -476,8 +500,16 @@ class SalidaAcopio(models.Model):
                 'etiqueta_no': linea.etiqueta_no,
             }
             residuo = self.env['manifiesto.ambiental.residuo'].create(residuo_vals)
-            if linea.lote_id:
-                residuo.lot_id = linea.lote_id.id
+            # Forzar CRETIB DESPUÉS del create para sobrescribir cualquier
+            # onchange/compute disparado por lot_id que pudiera resetear las clasificaciones
+            residuo.write({
+                'clasificacion_corrosivo': linea.clasificacion_corrosivo,
+                'clasificacion_reactivo': linea.clasificacion_reactivo,
+                'clasificacion_explosivo': linea.clasificacion_explosivo,
+                'clasificacion_toxico': linea.clasificacion_toxico,
+                'clasificacion_inflamable': linea.clasificacion_inflamable,
+                'clasificacion_biologico': linea.clasificacion_biologico,
+            })
         _logger.info(f"🎉 FIN CREACIÓN MANIFIESTO: {manifiesto.numero_manifiesto}")
         return manifiesto
 
@@ -540,7 +572,6 @@ class SalidaAcopioLinea(models.Model):
         'stock.lot', string='Lote',
     )
 
-    # === DOMINIO DINÁMICO PARA EL DROPDOWN DE LOTES ===
     available_lot_ids = fields.Many2many(
         'stock.lot',
         string='Lotes Disponibles',
@@ -548,7 +579,6 @@ class SalidaAcopioLinea(models.Model):
         help='Lotes con stock en Acopio, excluyendo los ya seleccionados en esta salida y los ya entregados en otras salidas'
     )
 
-    # === DOMINIO DINÁMICO PARA EL DROPDOWN DE PRODUCTOS ===
     available_product_ids = fields.Many2many(
         'product.product',
         string='Productos Disponibles',
@@ -637,7 +667,6 @@ class SalidaAcopioLinea(models.Model):
                 ('quantity', '>', 0),
             ])
             product_ids = quants.mapped('product_id').ids
-            # Mantener visible el producto actualmente seleccionado en esta línea
             if record.producto_id and record.producto_id.id not in product_ids:
                 product_ids = product_ids + [record.producto_id.id]
             record.available_product_ids = [(6, 0, product_ids)]
@@ -649,18 +678,15 @@ class SalidaAcopioLinea(models.Model):
                 record.available_lot_ids = [(5, 0, 0)]
                 continue
 
-            # 1. Lotes con stock en Acopio
             stock_lots = record._get_lots_with_stock_in_acopio()
             available_ids = set(stock_lots.ids)
 
-            # 2. Excluir lotes ya seleccionados en OTRAS líneas de la misma salida
             if record.salida_id:
                 used_in_same_salida = record.salida_id.linea_ids.filtered(
                     lambda l: l.id != record.id and l.lote_id
                 ).mapped('lote_id').ids
                 available_ids -= set(used_in_same_salida)
 
-            # 3. Excluir lotes ya usados en otras salidas (done o draft)
             if available_ids:
                 ya_usados = record.env['salida.acopio.linea'].search([
                     ('lote_id', 'in', list(available_ids)),
@@ -669,7 +695,6 @@ class SalidaAcopioLinea(models.Model):
                 ]).mapped('lote_id').ids
                 available_ids -= set(ya_usados)
 
-            # 4. Mantener visible el lote actualmente seleccionado en esta línea
             if record.lote_id:
                 available_ids.add(record.lote_id.id)
 
@@ -714,13 +739,15 @@ class SalidaAcopioLinea(models.Model):
         prod = self.producto_id
         if not prod:
             return
-        self.nombre_residuo = prod.name
+        if not self.nombre_residuo:
+            self.nombre_residuo = prod.name
+        # Solo precargar CRETIB si el producto los tiene en True (no pisar con False)
         for f in ('clasificacion_corrosivo', 'clasificacion_reactivo',
                   'clasificacion_explosivo', 'clasificacion_toxico',
                   'clasificacion_inflamable', 'clasificacion_biologico'):
-            if hasattr(prod, f):
-                setattr(self, f, getattr(prod, f))
-        if hasattr(prod, 'envase_tipo_default'):
+            if hasattr(prod, f) and getattr(prod, f):
+                setattr(self, f, True)
+        if hasattr(prod, 'envase_tipo_default') and prod.envase_tipo_default:
             self.envase_tipo = prod.envase_tipo_default
         if hasattr(prod, 'envase_capacidad_default') and prod.envase_capacidad_default:
             self.envase_capacidad = str(prod.envase_capacidad_default)
@@ -736,8 +763,8 @@ class SalidaAcopioLinea(models.Model):
             'clasificacion_inflamable', 'clasificacion_biologico',
         ]
         for f in cretib_fields:
-            if f in lot._fields:
-                setattr(self, f, getattr(lot, f))
+            if f in lot._fields and getattr(lot, f):
+                setattr(self, f, True)
         if 'tipo_manejo_id' in lot._fields and lot.tipo_manejo_id:
             self.tipo_manejo_id = lot.tipo_manejo_id.id
 
@@ -773,7 +800,6 @@ class SalidaAcopioLinea(models.Model):
                 self.cantidad = 0.0
             return
 
-        # === VALIDACIÓN INMEDIATA: lote duplicado en la misma salida ===
         if self.salida_id:
             lineas_con_lote = self.salida_id.linea_ids.filtered(
                 lambda l: l.lote_id and l.lote_id.id == self.lote_id.id
@@ -792,7 +818,6 @@ class SalidaAcopioLinea(models.Model):
                     }
                 }
 
-        # === VALIDACIÓN: lote ya usado en otra salida ===
         otras_done = self.env['salida.acopio.linea'].search([
             ('lote_id', '=', self.lote_id.id),
             ('salida_id', '!=', self.salida_id.id if self.salida_id else False),
@@ -814,7 +839,6 @@ class SalidaAcopioLinea(models.Model):
                 }
             }
 
-        # Calcular stock disponible y precargar datos
         location_acopio = self._get_location_acopio()
         if location_acopio:
             quants = self.env['stock.quant'].search([

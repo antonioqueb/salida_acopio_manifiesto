@@ -44,7 +44,13 @@
                             <field name="cantidad"
                                    decoration-bf="cantidad > stock_disponible"
                                    decoration-danger="cantidad > stock_disponible"/>
-                            <field name="clasificaciones_cretib" readonly="1"/>
+                            <field name="clasificacion_corrosivo" string="C" optional="show"/>
+                            <field name="clasificacion_reactivo" string="R" optional="show"/>
+                            <field name="clasificacion_explosivo" string="E" optional="show"/>
+                            <field name="clasificacion_toxico" string="T" optional="show"/>
+                            <field name="clasificacion_inflamable" string="I" optional="show"/>
+                            <field name="clasificacion_biologico" string="B" optional="show"/>
+                            <field name="clasificaciones_cretib" readonly="1" optional="hide"/>
                             <field name="tipo_manejo_id" optional="show"/>
                             <field name="envase_cantidad" optional="hide"/>
                             <field name="packaging_id" optional="hide"/>

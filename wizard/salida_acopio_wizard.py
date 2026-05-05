@@ -146,7 +146,6 @@ class SalidaAcopioWizard(models.TransientModel):
         if not self.destinatario_id:
             raise UserError("Debe seleccionar un destinatario final.")
 
-        # === VALIDACIONES de duplicados y lotes ya usados ===
         self._validate_no_duplicates()
         self._validate_lotes_no_usados()
 
@@ -238,7 +237,6 @@ class SalidaAcopioWizardLinea(models.TransientModel):
         string='Lote',
     )
 
-    # === DOMINIO DINÁMICO PARA EL DROPDOWN DE LOTES ===
     available_lot_ids = fields.Many2many(
         'stock.lot',
         string='Lotes Disponibles',
@@ -246,7 +244,6 @@ class SalidaAcopioWizardLinea(models.TransientModel):
         help='Lotes con stock en Acopio, excluyendo los ya seleccionados en este wizard y los ya usados en otras salidas'
     )
 
-    # === DOMINIO DINÁMICO PARA EL DROPDOWN DE PRODUCTOS ===
     available_product_ids = fields.Many2many(
         'product.product',
         string='Productos Disponibles',
@@ -310,7 +307,6 @@ class SalidaAcopioWizardLinea(models.TransientModel):
 
     @api.depends('wizard_id')
     def _compute_available_product_ids(self):
-        """Productos con quants en Acopio (cantidad > 0)."""
         location_acopio = None
         for record in self:
             if not location_acopio:
@@ -334,18 +330,15 @@ class SalidaAcopioWizardLinea(models.TransientModel):
                 record.available_lot_ids = [(5, 0, 0)]
                 continue
 
-            # 1. Lotes con stock en Acopio
             stock_lots = record._get_lots_with_stock_in_acopio()
             available_ids = set(stock_lots.ids)
 
-            # 2. Excluir lotes ya seleccionados en OTRAS líneas del mismo wizard
             if record.wizard_id:
                 used_in_same_wizard = record.wizard_id.linea_ids.filtered(
                     lambda l: l.id != record.id and l.lote_id
                 ).mapped('lote_id').ids
                 available_ids -= set(used_in_same_wizard)
 
-            # 3. Excluir lotes ya usados en otras salidas (done o draft)
             if available_ids:
                 ya_usados = record.env['salida.acopio.linea'].search([
                     ('lote_id', 'in', list(available_ids)),
@@ -353,7 +346,6 @@ class SalidaAcopioWizardLinea(models.TransientModel):
                 ]).mapped('lote_id').ids
                 available_ids -= set(ya_usados)
 
-            # 4. Mantener visible el lote actualmente seleccionado en esta línea
             if record.lote_id:
                 available_ids.add(record.lote_id.id)
 
@@ -398,13 +390,15 @@ class SalidaAcopioWizardLinea(models.TransientModel):
         prod = self.producto_id
         if not prod:
             return
-        self.nombre_residuo = prod.name
+        if not self.nombre_residuo:
+            self.nombre_residuo = prod.name
+        # Solo precargar CRETIB si el producto los tiene en True (no pisar con False)
         for f in ('clasificacion_corrosivo', 'clasificacion_reactivo',
                   'clasificacion_explosivo', 'clasificacion_toxico',
                   'clasificacion_inflamable', 'clasificacion_biologico'):
-            if hasattr(prod, f):
-                setattr(self, f, getattr(prod, f))
-        if hasattr(prod, 'envase_tipo_default'):
+            if hasattr(prod, f) and getattr(prod, f):
+                setattr(self, f, True)
+        if hasattr(prod, 'envase_tipo_default') and prod.envase_tipo_default:
             self.envase_tipo = prod.envase_tipo_default
         if hasattr(prod, 'envase_capacidad_default') and prod.envase_capacidad_default:
             self.envase_capacidad = str(prod.envase_capacidad_default)
@@ -420,8 +414,8 @@ class SalidaAcopioWizardLinea(models.TransientModel):
             'clasificacion_inflamable', 'clasificacion_biologico',
         ]
         for f in cretib_fields:
-            if f in lot._fields:
-                setattr(self, f, getattr(lot, f))
+            if f in lot._fields and getattr(lot, f):
+                setattr(self, f, True)
         if 'tipo_manejo_id' in lot._fields and lot.tipo_manejo_id:
             self.tipo_manejo_id = lot.tipo_manejo_id.id
 
@@ -457,7 +451,6 @@ class SalidaAcopioWizardLinea(models.TransientModel):
                 self.cantidad = 0.0
             return
 
-        # === VALIDACIÓN INMEDIATA: lote duplicado en el mismo wizard ===
         if self.wizard_id:
             lineas_con_lote = self.wizard_id.linea_ids.filtered(
                 lambda l: l.lote_id and l.lote_id.id == self.lote_id.id
@@ -476,7 +469,6 @@ class SalidaAcopioWizardLinea(models.TransientModel):
                     }
                 }
 
-        # === VALIDACIÓN: lote ya usado en otra salida ===
         otras = self.env['salida.acopio.linea'].search([
             ('lote_id', '=', self.lote_id.id),
             ('salida_id.state', 'in', ('draft', 'done')),
@@ -497,7 +489,6 @@ class SalidaAcopioWizardLinea(models.TransientModel):
                 }
             }
 
-        # Calcular stock disponible y precargar datos
         location_acopio = self._get_location_acopio()
         if location_acopio:
             quants = self.env['stock.quant'].search([
