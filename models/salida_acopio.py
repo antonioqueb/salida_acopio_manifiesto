@@ -729,10 +729,10 @@ class SalidaAcopioLinea(models.Model):
 
         # === VALIDACIÓN INMEDIATA: lote duplicado en la misma salida ===
         if self.salida_id:
-            otras_lineas = self.salida_id.linea_ids.filtered(
-                lambda l: l.id != self.id and l.lote_id and l.lote_id.id == self.lote_id.id
+            lineas_con_lote = self.salida_id.linea_ids.filtered(
+                lambda l: l.lote_id and l.lote_id.id == self.lote_id.id
             )
-            if otras_lineas:
+            if len(lineas_con_lote) > 1:
                 lote_name = self.lote_id.name
                 self.lote_id = False
                 self.cantidad = 0.0
@@ -810,7 +810,7 @@ class SalidaAcopioLinea(models.Model):
             if not record.lote_id or not record.salida_id:
                 continue
             duplicados = record.salida_id.linea_ids.filtered(
-                lambda l: l.id != record.id
+                lambda l: l != record
                 and l.lote_id
                 and l.lote_id.id == record.lote_id.id
             )

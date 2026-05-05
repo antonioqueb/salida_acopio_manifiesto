@@ -459,10 +459,10 @@ class SalidaAcopioWizardLinea(models.TransientModel):
 
         # === VALIDACIÓN INMEDIATA: lote duplicado en el mismo wizard ===
         if self.wizard_id:
-            otras_lineas = self.wizard_id.linea_ids.filtered(
-                lambda l: l.id != self.id and l.lote_id and l.lote_id.id == self.lote_id.id
+            lineas_con_lote = self.wizard_id.linea_ids.filtered(
+                lambda l: l.lote_id and l.lote_id.id == self.lote_id.id
             )
-            if otras_lineas:
+            if len(lineas_con_lote) > 1:
                 lote_name = self.lote_id.name
                 self.lote_id = False
                 self.cantidad = 0.0
@@ -557,7 +557,7 @@ class SalidaAcopioWizardLinea(models.TransientModel):
             if not record.lote_id or not record.wizard_id:
                 continue
             duplicados = record.wizard_id.linea_ids.filtered(
-                lambda l: l.id != record.id
+                lambda l: l != record
                 and l.lote_id
                 and l.lote_id.id == record.lote_id.id
             )
