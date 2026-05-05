@@ -16,7 +16,7 @@
         'base',
         'stock',
         'fleet',
-        'service_order_planning_fleet',
+        'service_order_planning',
         'manifiesto_ambiental',
     ],
     'data': [
