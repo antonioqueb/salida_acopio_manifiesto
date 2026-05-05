@@ -17,6 +17,19 @@ class StockPicking(models.Model):
         help='Indica si esta transferencia fue generada por una salida de acopio'
     )
 
+    nombre_operador = fields.Char(
+        string='Nombre del Operador',
+        help='Operador / chofer del vehículo'
+    )
+    camion = fields.Char(
+        string='Camión',
+        help='Descripción / tipo de vehículo'
+    )
+    placa = fields.Char(
+        string='Placa',
+        help='Número de placa del vehículo'
+    )
+
     def _compute_es_salida_acopio(self):
         for record in self:
             record.es_salida_acopio = bool(record.salida_acopio_id)
@@ -50,6 +63,19 @@ class StockMove(models.Model):
         string='Plan de Manejo',
         related='salida_acopio_linea_id.tipo_manejo_id',
         store=True,
+    )
+
+    nombre_operador = fields.Char(
+        string='Nombre del Operador',
+        help='Operador / chofer del vehículo'
+    )
+    camion = fields.Char(
+        string='Camión',
+        help='Descripción / tipo de vehículo'
+    )
+    placa = fields.Char(
+        string='Placa',
+        help='Número de placa del vehículo'
     )
 
     @api.depends(

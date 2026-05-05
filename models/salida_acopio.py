@@ -86,6 +86,20 @@ class SalidaAcopio(models.Model):
         required=True,
     )
 
+    # === DATOS DEL TRANSPORTE ===
+    nombre_operador = fields.Char(
+        string='Nombre del Operador',
+        help='Nombre del chofer / operador del vehículo'
+    )
+    camion = fields.Char(
+        string='Camión',
+        help='Descripción / tipo de vehículo (ej. Kenworth T800, Volvo VNL, etc.)'
+    )
+    placa = fields.Char(
+        string='Placa',
+        help='Número de placa del vehículo'
+    )
+
     state = fields.Selection([
         ('draft', 'Borrador'),
         ('done', 'Realizada'),
@@ -167,10 +181,7 @@ class SalidaAcopio(models.Model):
         if not self.destinatario_id:
             raise UserError("Debe seleccionar un destinatario final.")
 
-        # === VALIDACIÓN: lotes duplicados dentro de la misma salida ===
         self._validate_no_duplicates()
-
-        # === VALIDACIÓN: lotes ya usados en otras salidas ===
         self._validate_lotes_no_usados_previamente()
 
         for linea in self.linea_ids:
@@ -208,7 +219,6 @@ class SalidaAcopio(models.Model):
             raise UserError(f"Error al realizar la salida: {str(e)}")
 
     def _validate_no_duplicates(self):
-        """Valida que no haya lotes (o productos sin lote) duplicados en la misma salida."""
         self.ensure_one()
         seen = {}
         for linea in self.linea_ids:
@@ -227,15 +237,10 @@ class SalidaAcopio(models.Model):
             seen[key] = True
 
     def _validate_lotes_no_usados_previamente(self):
-        """
-        Valida que los lotes seleccionados no hayan sido usados en otra salida
-        ya realizada (state='done') o en otra salida en borrador del mismo día.
-        """
         self.ensure_one()
         for linea in self.linea_ids:
             if not linea.lote_id:
                 continue
-            # Lotes en otras salidas YA REALIZADAS
             otras_done = self.env['salida.acopio.linea'].search([
                 ('lote_id', '=', linea.lote_id.id),
                 ('salida_id', '!=', self.id),
@@ -249,7 +254,6 @@ class SalidaAcopio(models.Model):
                     f"'{otras_done.salida_id.numero_referencia}'.\n\n"
                     f"No es posible volver a darle salida."
                 )
-            # Lotes en otras salidas EN BORRADOR (alerta de reserva doble)
             otras_draft = self.env['salida.acopio.linea'].search([
                 ('lote_id', '=', linea.lote_id.id),
                 ('salida_id', '!=', self.id),
@@ -290,7 +294,7 @@ class SalidaAcopio(models.Model):
                     _logger.warning(f"No se pudo sincronizar datos al lote {lot.name}: {e}")
 
     def _build_move_description(self, linea):
-        """Construye la descripción del move incluyendo CRETIB y plan de manejo."""
+        """Construye la descripción del move incluyendo CRETIB, plan de manejo y datos del transporte."""
         parts = [linea.nombre_residuo or linea.producto_id.display_name]
         if linea.clasificaciones_cretib:
             parts.append(f"CRETIB: {linea.clasificaciones_cretib}")
@@ -298,6 +302,12 @@ class SalidaAcopio(models.Model):
             parts.append(f"Lote: {linea.lote_id.name}")
         if linea.tipo_manejo_id:
             parts.append(f"Plan de Manejo: {linea.tipo_manejo_id.name}")
+        if self.nombre_operador:
+            parts.append(f"Operador: {self.nombre_operador}")
+        if self.camion:
+            parts.append(f"Camión: {self.camion}")
+        if self.placa:
+            parts.append(f"Placa: {self.placa}")
         return "\n".join(parts)
 
     def _create_stock_picking(self):
@@ -310,7 +320,7 @@ class SalidaAcopio(models.Model):
         if not picking_type:
             raise UserError("No se encontró un tipo de operación de salida configurado.")
 
-        # PASO 1: Crear el picking SIN moves
+        # PASO 1: Crear el picking SIN moves (con datos del transporte)
         _logger.info("[ACOPIO] PASO 1: creando picking vacío")
         picking = self.env['stock.picking'].create({
             'picking_type_id': picking_type.id,
@@ -321,10 +331,13 @@ class SalidaAcopio(models.Model):
             'company_id': self.company_id.id,
             'partner_id': self.destinatario_id.id,
             'salida_acopio_id': self.id,
+            'nombre_operador': self.nombre_operador or '',
+            'camion': self.camion or '',
+            'placa': self.placa or '',
         })
         _logger.info(f"[ACOPIO] Picking creado: {picking.id} - {picking.name}")
 
-        # PASO 2: Crear cada move INDIVIDUALMENTE con CRETIB y vínculo a la línea
+        # PASO 2: Crear cada move INDIVIDUALMENTE con CRETIB y datos del transporte
         moves_created = []
         for idx, linea in enumerate(self.linea_ids, start=1):
             _logger.info(f"[ACOPIO] PASO 2.{idx}: creando move para {linea.producto_id.name}")
@@ -344,6 +357,9 @@ class SalidaAcopio(models.Model):
                 'clasificacion_toxico': linea.clasificacion_toxico,
                 'clasificacion_inflamable': linea.clasificacion_inflamable,
                 'clasificacion_biologico': linea.clasificacion_biologico,
+                'nombre_operador': self.nombre_operador or '',
+                'camion': self.camion or '',
+                'placa': self.placa or '',
             }
             move = self.env['stock.move'].create(move_vals)
             _logger.info(f"[ACOPIO] Move creado: {move.id}")
@@ -383,7 +399,7 @@ class SalidaAcopio(models.Model):
                         'location_dest_id': location_customer.id,
                     })
 
-        # PASO 4.5: Re-escribir CRETIB en los moves por si el flujo de assign los pisó
+        # PASO 4.5: Re-escribir CRETIB y datos del transporte en los moves
         for move, linea in moves_created:
             move.write({
                 'clasificacion_corrosivo': linea.clasificacion_corrosivo,
@@ -393,6 +409,9 @@ class SalidaAcopio(models.Model):
                 'clasificacion_inflamable': linea.clasificacion_inflamable,
                 'clasificacion_biologico': linea.clasificacion_biologico,
                 'description_picking': self._build_move_description(linea),
+                'nombre_operador': self.nombre_operador or '',
+                'camion': self.camion or '',
+                'placa': self.placa or '',
             })
 
         # PASO 5: Marcar picked (Odoo 17+)
@@ -461,9 +480,10 @@ class SalidaAcopio(models.Model):
             'transportista_email': self.transportista_id.email or '',
             'numero_autorizacion_semarnat': getattr(self.transportista_id, 'numero_autorizacion_semarnat', '') or '',
             'numero_permiso_sct': getattr(self.transportista_id, 'numero_permiso_sct', '') or '',
-            'tipo_vehiculo': getattr(self.transportista_id, 'tipo_vehiculo', '') or '',
-            'numero_placa': getattr(self.transportista_id, 'numero_placa', '') or '',
-            'transportista_responsable_nombre': '',
+            # Datos del transporte (priorizan los capturados en la salida)
+            'tipo_vehiculo': self.camion or getattr(self.transportista_id, 'tipo_vehiculo', '') or '',
+            'numero_placa': self.placa or getattr(self.transportista_id, 'numero_placa', '') or '',
+            'transportista_responsable_nombre': self.nombre_operador or '',
             'transportista_fecha': self.fecha_salida.date() if self.fecha_salida else fields.Date.context_today(self),
             'destinatario_id': self.destinatario_id.id,
             'destinatario_nombre': self.destinatario_id.name or '',
@@ -500,8 +520,6 @@ class SalidaAcopio(models.Model):
                 'etiqueta_no': linea.etiqueta_no,
             }
             residuo = self.env['manifiesto.ambiental.residuo'].create(residuo_vals)
-            # Forzar CRETIB DESPUÉS del create para sobrescribir cualquier
-            # onchange/compute disparado por lot_id que pudiera resetear las clasificaciones
             residuo.write({
                 'clasificacion_corrosivo': linea.clasificacion_corrosivo,
                 'clasificacion_reactivo': linea.clasificacion_reactivo,
@@ -576,14 +594,12 @@ class SalidaAcopioLinea(models.Model):
         'stock.lot',
         string='Lotes Disponibles',
         compute='_compute_available_lot_ids',
-        help='Lotes con stock en Acopio, excluyendo los ya seleccionados en esta salida y los ya entregados en otras salidas'
     )
 
     available_product_ids = fields.Many2many(
         'product.product',
         string='Productos Disponibles',
         compute='_compute_available_product_ids',
-        help='Productos con stock disponible en la ubicación Acopio'
     )
 
     cantidad = fields.Float(
@@ -639,7 +655,6 @@ class SalidaAcopioLinea(models.Model):
         return _find_location_acopio(self.env, self.env.company.id)
 
     def _get_lots_with_stock_in_acopio(self):
-        """Retorna recordset de lotes con stock > 0 en Acopio para el producto actual."""
         if not self.producto_id:
             return self.env['stock.lot']
         location_acopio = self._get_location_acopio()
@@ -654,7 +669,6 @@ class SalidaAcopioLinea(models.Model):
 
     @api.depends('salida_id')
     def _compute_available_product_ids(self):
-        """Productos con quants en Acopio (cantidad > 0)."""
         location_acopio = None
         for record in self:
             if not location_acopio:
@@ -741,7 +755,6 @@ class SalidaAcopioLinea(models.Model):
             return
         if not self.nombre_residuo:
             self.nombre_residuo = prod.name
-        # Solo precargar CRETIB si el producto los tiene en True (no pisar con False)
         for f in ('clasificacion_corrosivo', 'clasificacion_reactivo',
                   'clasificacion_explosivo', 'clasificacion_toxico',
                   'clasificacion_inflamable', 'clasificacion_biologico'):
@@ -875,7 +888,6 @@ class SalidaAcopioLinea(models.Model):
 
     @api.constrains('lote_id', 'producto_id', 'salida_id')
     def _check_lote_unico_en_salida(self):
-        """Constraint dura: el mismo lote no puede repetirse en la misma salida."""
         for record in self:
             if not record.lote_id or not record.salida_id:
                 continue

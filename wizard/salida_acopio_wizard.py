@@ -56,6 +56,10 @@ class SalidaAcopioWizard(models.TransientModel):
         required=True,
     )
 
+    nombre_operador = fields.Char(string='Nombre del Operador')
+    camion = fields.Char(string='Camión')
+    placa = fields.Char(string='Placa')
+
     linea_ids = fields.One2many(
         'salida.acopio.wizard.linea',
         'wizard_id',
@@ -101,7 +105,6 @@ class SalidaAcopioWizard(models.TransientModel):
             record.cantidad_total = sum(record.linea_ids.mapped('cantidad'))
 
     def _validate_no_duplicates(self):
-        """Valida duplicados de lote dentro del wizard antes de crear la salida."""
         seen = {}
         for linea in self.linea_ids:
             if linea.lote_id:
@@ -119,7 +122,6 @@ class SalidaAcopioWizard(models.TransientModel):
             seen[key] = True
 
     def _validate_lotes_no_usados(self):
-        """Valida que los lotes no estén ya en otra salida (done o draft)."""
         for linea in self.linea_ids:
             if not linea.lote_id:
                 continue
@@ -189,6 +191,9 @@ class SalidaAcopioWizard(models.TransientModel):
             salida_vals = {
                 'transportista_id': self.transportista_id.id,
                 'destinatario_id': self.destinatario_id.id,
+                'nombre_operador': self.nombre_operador or '',
+                'camion': self.camion or '',
+                'placa': self.placa or '',
                 'observaciones': self.observaciones,
             }
             salida = self.env['salida.acopio'].create(salida_vals)
@@ -241,14 +246,12 @@ class SalidaAcopioWizardLinea(models.TransientModel):
         'stock.lot',
         string='Lotes Disponibles',
         compute='_compute_available_lot_ids',
-        help='Lotes con stock en Acopio, excluyendo los ya seleccionados en este wizard y los ya usados en otras salidas'
     )
 
     available_product_ids = fields.Many2many(
         'product.product',
         string='Productos Disponibles',
         compute='_compute_available_product_ids',
-        help='Productos con stock disponible en la ubicación Acopio'
     )
 
     cantidad = fields.Float(
@@ -392,7 +395,6 @@ class SalidaAcopioWizardLinea(models.TransientModel):
             return
         if not self.nombre_residuo:
             self.nombre_residuo = prod.name
-        # Solo precargar CRETIB si el producto los tiene en True (no pisar con False)
         for f in ('clasificacion_corrosivo', 'clasificacion_reactivo',
                   'clasificacion_explosivo', 'clasificacion_toxico',
                   'clasificacion_inflamable', 'clasificacion_biologico'):
@@ -543,7 +545,6 @@ class SalidaAcopioWizardLinea(models.TransientModel):
 
     @api.constrains('lote_id', 'wizard_id')
     def _check_lote_unico_en_wizard(self):
-        """Constraint dura: el mismo lote no puede repetirse en el mismo wizard."""
         for record in self:
             if not record.lote_id or not record.wizard_id:
                 continue

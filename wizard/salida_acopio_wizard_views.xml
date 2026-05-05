@@ -23,6 +23,15 @@
                            options="{'no_create': True}"/>
                 </group>
 
+                <group string="Datos del Vehículo y Operador" col="3">
+                    <field name="nombre_operador"
+                           placeholder="Ej. Juan Pérez García"/>
+                    <field name="camion"
+                           placeholder="Ej. Kenworth T800 Blanco"/>
+                    <field name="placa"
+                           placeholder="Ej. ABC-123-A"/>
+                </group>
+
                 <group string="Resumen" col="2">
                     <field name="total_residuos" readonly="1"/>
                     <field name="cantidad_total" readonly="1"/>
@@ -118,6 +127,7 @@
                         <li>No se pueden seleccionar lotes ya entregados o reservados en otras salidas</li>
                         <li>No se puede repetir el mismo lote en dos líneas de la misma salida</li>
                         <li>Al seleccionar un lote, sus datos CRETIB y plan de manejo se precargan automáticamente</li>
+                        <li>Los datos del operador, camión y placa se propagan al picking, a cada movimiento de inventario y al manifiesto</li>
                     </ul>
                 </div>
 

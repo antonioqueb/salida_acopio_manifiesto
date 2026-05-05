@@ -9,21 +9,6 @@
         
         Este módulo permite realizar salidas automáticas de residuos del inventario
         hacia su disposición final, generando manifiestos donde SAI es el generador.
-        
-        Características principales:
-        • Control de salidas desde ubicación "Acopio"
-        • Generación automática de manifiestos de salida (SAI como generador)
-        • Integración completa con el módulo de manifiestos
-        • Trazabilidad completa de despachos
-        • Menú raíz independiente para gestión completa
-        
-        Funcionalidades:
-        • Salida automática desde inventario ubicación "Acopio"
-        • Generación de manifiestos con SAI como generador
-        • Selección de transportista y destinatario
-        • Integración con transferencias de stock
-        • Validaciones de negocio robustas
-        • Historial completo de salidas
     ''',
     'author': 'Alphaqueb Consulting',
     'website': 'https://alphaqueb.com',
@@ -35,6 +20,7 @@
         'wizard/salida_acopio_wizard_views.xml',
         'views/salida_acopio_views.xml',
         'views/salida_acopio_print_views.xml',
+        'views/stock_picking_views.xml',
         'views/salida_acopio_menus.xml',
     ],
     'demo': [],
