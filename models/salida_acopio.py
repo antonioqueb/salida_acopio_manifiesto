@@ -298,6 +298,23 @@ class SalidaAcopio(models.Model):
         ], limit=1)
         if not picking_type:
             raise UserError("No se encontró un tipo de operación de salida configurado.")
+
+        # 1. Construir los moves CON 'name' para que el reporte nativo los muestre
+        move_vals_list = []
+        for linea in self.linea_ids:
+            descripcion = linea.nombre_residuo or linea.producto_id.display_name
+            move_vals_list.append((0, 0, {
+                'name': descripcion,
+                'product_id': linea.producto_id.id,
+                'product_uom_qty': linea.cantidad,
+                'product_uom': linea.producto_id.uom_id.id,
+                'location_id': location_acopio.id,
+                'location_dest_id': location_customer.id,
+                'company_id': self.company_id.id,
+                'description_picking': descripcion,
+            }))
+
+        # 2. Crear picking + moves en un solo create
         picking = self.env['stock.picking'].create({
             'picking_type_id': picking_type.id,
             'location_id': location_acopio.id,
@@ -307,21 +324,22 @@ class SalidaAcopio(models.Model):
             'company_id': self.company_id.id,
             'partner_id': self.destinatario_id.id,
             'salida_acopio_id': self.id,
+            'move_ids': move_vals_list,
         })
-        for linea in self.linea_ids:
-            move = self.env['stock.move'].create({
-                'product_id': linea.producto_id.id,
-                'product_uom_qty': linea.cantidad,
-                'product_uom': linea.producto_id.uom_id.id,
-                'picking_id': picking.id,
-                'location_id': location_acopio.id,
-                'location_dest_id': location_customer.id,
-                'company_id': self.company_id.id,
-                'description_picking': f"Salida Acopio: {linea.producto_id.name}",
-            })
+
+        # 3. Confirmar y reservar
+        picking.action_confirm()
+        picking.action_assign()
+
+        # 4. Asignar lote y cantidad correcta a cada move_line
+        # IMPORTANTE: emparejar moves con líneas en el mismo orden de creación
+        for move, linea in zip(picking.move_ids, self.linea_ids):
             if linea.lote_id:
+                # Eliminar move_lines reservadas automáticamente y crear con el lote correcto
+                move.move_line_ids.unlink()
                 self.env['stock.move.line'].create({
                     'move_id': move.id,
+                    'picking_id': picking.id,
                     'product_id': linea.producto_id.id,
                     'lot_id': linea.lote_id.id,
                     'quantity': linea.cantidad,
@@ -329,15 +347,31 @@ class SalidaAcopio(models.Model):
                     'location_id': location_acopio.id,
                     'location_dest_id': location_customer.id,
                 })
-        picking.action_confirm()
-        picking.action_assign()
-        can_validate = all(
-            move.move_line_ids
-            for move in picking.move_ids
-            if move.product_id.tracking in ('lot', 'serial')
-        )
-        if can_validate:
+            else:
+                # Sin lote: asegurar que haya move_line con la cantidad correcta
+                if move.move_line_ids:
+                    move.move_line_ids[0].quantity = linea.cantidad
+                else:
+                    self.env['stock.move.line'].create({
+                        'move_id': move.id,
+                        'picking_id': picking.id,
+                        'product_id': linea.producto_id.id,
+                        'quantity': linea.cantidad,
+                        'product_uom_id': linea.producto_id.uom_id.id,
+                        'location_id': location_acopio.id,
+                        'location_dest_id': location_customer.id,
+                    })
+
+        # 5. Marcar todos los moves como "picked" (Odoo 17+)
+        picking.move_ids.write({'picked': True})
+
+        # 6. Validar el picking
+        try:
+            picking.with_context(skip_backorder=True, picking_ids_not_to_backorder=picking.ids).button_validate()
+        except Exception as e:
+            _logger.warning(f"button_validate falló, intentando validación directa: {e}")
             picking.button_validate()
+
         return picking
 
     def _get_or_create_sai_partner(self):
