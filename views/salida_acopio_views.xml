@@ -134,8 +134,9 @@
                         <page string="Líneas de Salida">
                             <field name="linea_ids" readonly="state != 'draft'">
                                 <list editable="bottom">
+                                    <field name="available_product_ids" column_invisible="1"/>
                                     <field name="producto_id"
-                                           domain="[('type', '!=', 'service')]"
+                                           domain="[('id', 'in', available_product_ids)]"
                                            options="{'no_create': True}"/>
                                     <field name="available_lot_ids" column_invisible="1"/>
                                     <field name="lote_id"
@@ -155,8 +156,9 @@
                                     <sheet>
                                         <group col="2">
                                             <group string="Producto y Lote">
+                                                <field name="available_product_ids" invisible="1"/>
                                                 <field name="producto_id"
-                                                       domain="[('type', '!=', 'service')]"
+                                                       domain="[('id', 'in', available_product_ids)]"
                                                        options="{'no_create': True}"/>
                                                 <field name="available_lot_ids" invisible="1"/>
                                                 <field name="lote_id"

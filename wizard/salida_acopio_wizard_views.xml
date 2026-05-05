@@ -31,8 +31,9 @@
                 <group string="Residuos a Dar de Salida">
                     <field name="linea_ids" nolabel="1">
                         <list editable="bottom" string="Residuos">
+                            <field name="available_product_ids" column_invisible="1"/>
                             <field name="producto_id"
-                                   domain="[('type', '!=', 'service')]"
+                                   domain="[('id', 'in', available_product_ids)]"
                                    options="{'no_create': True}"/>
                             <field name="available_lot_ids" column_invisible="1"/>
                             <field name="lote_id"
@@ -54,8 +55,9 @@
                             <sheet>
                                 <group col="2">
                                     <group string="Producto y Lote">
+                                        <field name="available_product_ids" invisible="1"/>
                                         <field name="producto_id"
-                                               domain="[('type', '!=', 'service')]"
+                                               domain="[('id', 'in', available_product_ids)]"
                                                options="{'no_create': True}"/>
                                         <field name="available_lot_ids" invisible="1"/>
                                         <field name="lote_id"

@@ -246,6 +246,14 @@ class SalidaAcopioWizardLinea(models.TransientModel):
         help='Lotes con stock en Acopio, excluyendo los ya seleccionados en este wizard y los ya usados en otras salidas'
     )
 
+    # === DOMINIO DINÁMICO PARA EL DROPDOWN DE PRODUCTOS ===
+    available_product_ids = fields.Many2many(
+        'product.product',
+        string='Productos Disponibles',
+        compute='_compute_available_product_ids',
+        help='Productos con stock disponible en la ubicación Acopio'
+    )
+
     cantidad = fields.Float(
         string='Cantidad a Salir (kg)',
         required=True,
@@ -299,6 +307,25 @@ class SalidaAcopioWizardLinea(models.TransientModel):
             ('quantity', '>', 0),
         ])
         return quants.mapped('lot_id')
+
+    @api.depends('wizard_id')
+    def _compute_available_product_ids(self):
+        """Productos con quants en Acopio (cantidad > 0)."""
+        location_acopio = None
+        for record in self:
+            if not location_acopio:
+                location_acopio = record._get_location_acopio()
+            if not location_acopio:
+                record.available_product_ids = [(5, 0, 0)]
+                continue
+            quants = record.env['stock.quant'].search([
+                ('location_id', '=', location_acopio.id),
+                ('quantity', '>', 0),
+            ])
+            product_ids = quants.mapped('product_id').ids
+            if record.producto_id and record.producto_id.id not in product_ids:
+                product_ids = product_ids + [record.producto_id.id]
+            record.available_product_ids = [(6, 0, product_ids)]
 
     @api.depends('producto_id', 'wizard_id.linea_ids.lote_id', 'wizard_id.linea_ids.producto_id')
     def _compute_available_lot_ids(self):
