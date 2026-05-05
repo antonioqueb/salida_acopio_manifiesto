@@ -13,30 +13,35 @@
                     </p>
                 </div>
 
-                <group string="Información del Transporte" col="2">
-                    <field name="transportista_id"
-                           placeholder="Transportista (SAI por defecto)..."
-                           options="{'no_create': True}"/>
-                    <field name="destinatario_id"
-                           placeholder="Seleccione el destinatario final..."
-                           options="{'no_create': True}"/>
+                <!-- Transporte + Vehículo/Operador lado a lado -->
+                <group>
+                    <group string="Información del Transporte">
+                        <field name="transportista_id"
+                               placeholder="Transportista (SAI por defecto)..."
+                               options="{'no_create': True}"/>
+                        <field name="destinatario_id"
+                               placeholder="Seleccione el destinatario final..."
+                               options="{'no_create': True}"/>
+                    </group>
+                    <group string="Datos del Vehículo y Operador">
+                        <field name="chofer_id"
+                               options="{'no_create': True}"
+                               placeholder="Seleccionar chofer..."/>
+                        <field name="vehicle_id"
+                               options="{'no_create': True}"
+                               placeholder="Seleccionar vehículo de flota..."/>
+                        <field name="numero_placa"
+                               readonly="1"
+                               placeholder="Se rellena desde el vehículo"/>
+                    </group>
                 </group>
 
-                <group string="Datos del Vehículo y Operador" col="3">
-                    <field name="chofer_id"
-                           options="{'no_create': True}"
-                           placeholder="Seleccionar chofer..."/>
-                    <field name="vehicle_id"
-                           options="{'no_create': True}"
-                           placeholder="Seleccionar vehículo de flota..."/>
-                    <field name="numero_placa"
-                           readonly="1"
-                           placeholder="Se rellena desde el vehículo"/>
-                </group>
-
-                <group string="Resumen" col="2">
-                    <field name="total_residuos" readonly="1"/>
-                    <field name="cantidad_total" readonly="1"/>
+                <!-- Resumen al frente -->
+                <group>
+                    <group string="Resumen">
+                        <field name="total_residuos" readonly="1"/>
+                        <field name="cantidad_total" readonly="1"/>
+                    </group>
                 </group>
 
                 <group string="Residuos a Dar de Salida">
@@ -70,7 +75,7 @@
                         </list>
                         <form string="Detalle del Residuo">
                             <sheet>
-                                <group col="2">
+                                <group>
                                     <group string="Producto y Lote">
                                         <field name="available_product_ids" invisible="1"/>
                                         <field name="producto_id"
@@ -99,16 +104,17 @@
                                     <field name="clasificacion_biologico"/>
                                 </group>
 
-                                <group string="Envase" col="4">
-                                    <field name="envase_cantidad" string="Unidades"/>
-                                    <field name="packaging_id" string="Embalaje"/>
-                                    <field name="envase_tipo" string="Tipo (Legacy)"/>
-                                    <field name="envase_capacidad"/>
-                                </group>
-
-                                <group string="Etiquetado" col="2">
-                                    <field name="etiqueta_si"/>
-                                    <field name="etiqueta_no"/>
+                                <group>
+                                    <group string="Envase">
+                                        <field name="envase_cantidad" string="Unidades"/>
+                                        <field name="packaging_id" string="Embalaje"/>
+                                        <field name="envase_tipo" string="Tipo (Legacy)"/>
+                                        <field name="envase_capacidad"/>
+                                    </group>
+                                    <group string="Etiquetado">
+                                        <field name="etiqueta_si"/>
+                                        <field name="etiqueta_no"/>
+                                    </group>
                                 </group>
                             </sheet>
                         </form>
