@@ -11,29 +11,29 @@
                        invisible="not salida_acopio_id"
                        col="4">
                     <field name="salida_acopio_id" readonly="1"/>
-                    <field name="nombre_operador"/>
-                    <field name="camion"/>
-                    <field name="placa"/>
+                    <field name="chofer_id"/>
+                    <field name="vehicle_id"/>
+                    <field name="numero_placa"/>
                 </group>
             </xpath>
         </field>
     </record>
 
-    <!-- Agregar columnas opcionales en la lista de stock.picking -->
+    <!-- Columnas opcionales en la lista de stock.picking -->
     <record id="view_picking_tree_inherit_salida_acopio" model="ir.ui.view">
         <field name="name">stock.picking.tree.salida.acopio</field>
         <field name="model">stock.picking</field>
         <field name="inherit_id" ref="stock.vpicktree"/>
         <field name="arch" type="xml">
             <field name="state" position="before">
-                <field name="nombre_operador" optional="hide"/>
-                <field name="camion" optional="hide"/>
-                <field name="placa" optional="hide"/>
+                <field name="chofer_id" optional="hide"/>
+                <field name="vehicle_id" optional="hide"/>
+                <field name="numero_placa" optional="hide"/>
             </field>
         </field>
     </record>
 
-    <!-- Agregar columnas opcionales en el historial de movimientos (stock.move) -->
+    <!-- Columnas opcionales en el historial de movimientos (stock.move) -->
     <record id="view_move_tree_inherit_salida_acopio" model="ir.ui.view">
         <field name="name">stock.move.tree.salida.acopio</field>
         <field name="model">stock.move</field>
@@ -41,24 +41,24 @@
         <field name="arch" type="xml">
             <field name="state" position="before">
                 <field name="cretib_summary" optional="show"/>
-                <field name="nombre_operador" optional="show"/>
-                <field name="camion" optional="hide"/>
-                <field name="placa" optional="show"/>
+                <field name="chofer_id" optional="show"/>
+                <field name="vehicle_id" optional="hide"/>
+                <field name="numero_placa" optional="show"/>
                 <field name="tipo_manejo_salida_id" optional="hide"/>
             </field>
         </field>
     </record>
 
-    <!-- Búsqueda en stock.picking por placa, operador, camión -->
+    <!-- Búsqueda en stock.picking por chofer, vehículo, placa -->
     <record id="view_picking_internal_search_inherit_salida_acopio" model="ir.ui.view">
         <field name="name">stock.picking.search.salida.acopio</field>
         <field name="model">stock.picking</field>
         <field name="inherit_id" ref="stock.view_picking_internal_search"/>
         <field name="arch" type="xml">
             <field name="origin" position="after">
-                <field name="nombre_operador"/>
-                <field name="camion"/>
-                <field name="placa"/>
+                <field name="chofer_id"/>
+                <field name="vehicle_id"/>
+                <field name="numero_placa"/>
                 <field name="salida_acopio_id"/>
             </field>
         </field>

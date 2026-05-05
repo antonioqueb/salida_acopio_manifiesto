@@ -8,10 +8,6 @@
             <p class="o_view_nocontent_smiling_face">
                 No hay salidas de acopio registradas
             </p>
-            <p>
-                Las salidas de acopio permiten dar de salida residuos del inventario hacia su disposición final,
-                generando automáticamente manifiestos donde SAI es el generador.
-            </p>
         </field>
     </record>
 
@@ -30,9 +26,9 @@
                 <field name="numero_referencia"/>
                 <field name="transportista_id"/>
                 <field name="destinatario_id"/>
-                <field name="nombre_operador" optional="show"/>
-                <field name="camion" optional="hide"/>
-                <field name="placa" optional="show"/>
+                <field name="chofer_id" optional="show"/>
+                <field name="vehicle_id" optional="hide"/>
+                <field name="numero_placa" optional="show"/>
                 <field name="fecha_salida"/>
                 <field name="usuario_salida"/>
                 <field name="total_residuos"/>
@@ -127,13 +123,18 @@
                         <field name="usuario_salida" readonly="1"/>
                     </group>
 
-                    <group string="Datos del Vehículo y Operador" col="4">
-                        <field name="nombre_operador" readonly="state != 'draft'"
-                               placeholder="Ej. Juan Pérez García"/>
-                        <field name="camion" readonly="state != 'draft'"
-                               placeholder="Ej. Kenworth T800 Blanco"/>
-                        <field name="placa" readonly="state != 'draft'"
-                               placeholder="Ej. ABC-123-A"/>
+                    <group string="Datos del Vehículo y Operador" col="3">
+                        <field name="chofer_id"
+                               readonly="state != 'draft'"
+                               options="{'no_create': True}"
+                               placeholder="Seleccionar chofer..."/>
+                        <field name="vehicle_id"
+                               readonly="state != 'draft'"
+                               options="{'no_create': True}"
+                               placeholder="Seleccionar vehículo de flota..."/>
+                        <field name="numero_placa"
+                               readonly="1"
+                               placeholder="Se rellena desde el vehículo"/>
                     </group>
 
                     <group string="Resumen" col="4">
@@ -188,8 +189,7 @@
                                             <group string="Identificación del Residuo">
                                                 <field name="nombre_residuo"/>
                                                 <field name="residue_type"/>
-                                                <field name="tipo_manejo_id"
-                                                       options="{'no_create': True}"/>
+                                                <field name="tipo_manejo_id" options="{'no_create': True}"/>
                                             </group>
                                         </group>
 
@@ -241,9 +241,9 @@
                 <field name="destinatario_id"/>
                 <field name="manifiesto_salida_id"/>
                 <field name="usuario_salida"/>
-                <field name="nombre_operador"/>
-                <field name="placa"/>
-                <field name="camion"/>
+                <field name="chofer_id"/>
+                <field name="vehicle_id"/>
+                <field name="numero_placa"/>
                 <filter string="Borradores" name="draft" domain="[('state','=','draft')]"/>
                 <filter string="Realizadas" name="done" domain="[('state','=','done')]"/>
                 <filter string="Canceladas" name="cancel" domain="[('state','=','cancel')]"/>
@@ -256,8 +256,9 @@
                 <filter string="Estado" name="group_state" context="{'group_by':'state'}"/>
                 <filter string="Transportista" name="group_transportista" context="{'group_by':'transportista_id'}"/>
                 <filter string="Destinatario" name="group_destinatario" context="{'group_by':'destinatario_id'}"/>
-                <filter string="Operador" name="group_operador" context="{'group_by':'nombre_operador'}"/>
-                <filter string="Placa" name="group_placa" context="{'group_by':'placa'}"/>
+                <filter string="Chofer" name="group_chofer" context="{'group_by':'chofer_id'}"/>
+                <filter string="Vehículo" name="group_vehicle" context="{'group_by':'vehicle_id'}"/>
+                <filter string="Placa" name="group_placa" context="{'group_by':'numero_placa'}"/>
                 <filter string="Usuario" name="group_user" context="{'group_by':'usuario_salida'}"/>
                 <filter string="Fecha" name="group_date" context="{'group_by':'fecha_salida:day'}"/>
             </search>

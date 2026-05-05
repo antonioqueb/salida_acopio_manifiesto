@@ -7,7 +7,6 @@ _logger = logging.getLogger(__name__)
 
 
 def _find_location_acopio(env, company_id=None):
-    """Busca la ubicación Acopio de forma flexible por complete_name."""
     domain = [
         ('complete_name', 'ilike', 'Acopio'),
         ('usage', '=', 'internal'),
@@ -46,30 +45,24 @@ class SalidaAcopio(models.Model):
 
     numero_referencia = fields.Char(
         string='Número de Referencia',
-        required=True,
-        copy=False,
-        readonly=True,
-        default='/'
+        required=True, copy=False, readonly=True, default='/'
     )
 
     manifiesto_salida_id = fields.Many2one(
         'manifiesto.ambiental',
         string='Manifiesto de Salida Generado',
         readonly=True,
-        help='Manifiesto ambiental generado para esta salida (SAI como generador)'
     )
 
     fecha_salida = fields.Datetime(
         string='Fecha de Salida',
-        required=True,
-        default=fields.Datetime.now
+        required=True, default=fields.Datetime.now
     )
 
     usuario_salida = fields.Many2one(
         'res.users',
         string='Usuario que Procesó la Salida',
-        required=True,
-        default=lambda self: self.env.user
+        required=True, default=lambda self: self.env.user
     )
 
     transportista_id = fields.Many2one(
@@ -86,18 +79,22 @@ class SalidaAcopio(models.Model):
         required=True,
     )
 
-    # === DATOS DEL TRANSPORTE ===
-    nombre_operador = fields.Char(
-        string='Nombre del Operador',
-        help='Nombre del chofer / operador del vehículo'
+    # === DATOS DEL TRANSPORTE (mismo patrón que service.order) ===
+    chofer_id = fields.Many2one(
+        'res.partner',
+        string='Chofer',
+        help='Operador / chofer del vehículo. Se busca del catálogo de contactos.'
     )
-    camion = fields.Char(
-        string='Camión',
-        help='Descripción / tipo de vehículo (ej. Kenworth T800, Volvo VNL, etc.)'
+
+    vehicle_id = fields.Many2one(
+        'fleet.vehicle',
+        string='Vehículo',
+        help='Unidad de transporte. Se busca del catálogo de flota.'
     )
-    placa = fields.Char(
-        string='Placa',
-        help='Número de placa del vehículo'
+
+    numero_placa = fields.Char(
+        string='Número de Placa',
+        help='Se rellena automáticamente desde el vehículo seleccionado.'
     )
 
     state = fields.Selection([
@@ -113,28 +110,24 @@ class SalidaAcopio(models.Model):
     )
 
     linea_ids = fields.One2many(
-        'salida.acopio.linea',
-        'salida_id',
+        'salida.acopio.linea', 'salida_id',
         string='Líneas de Salida'
     )
 
     total_residuos = fields.Integer(
         string='Total de Residuos',
-        compute='_compute_totales',
-        store=True
+        compute='_compute_totales', store=True
     )
 
     cantidad_total = fields.Float(
         string='Cantidad Total (kg)',
-        compute='_compute_totales',
-        store=True
+        compute='_compute_totales', store=True
     )
 
     observaciones = fields.Text(string='Observaciones')
 
     company_id = fields.Many2one(
-        'res.company',
-        string='Compañía',
+        'res.company', string='Compañía',
         default=lambda self: self.env.company
     )
 
@@ -153,7 +146,20 @@ class SalidaAcopio(models.Model):
                 vals['numero_referencia'] = self.env['ir.sequence'].with_context(
                     ir_sequence_date=fecha_local.date()
                 ).next_by_code('salida.acopio') or '/'
+            # Auto-llenar placa desde vehículo si no viene explícita
+            if vals.get('vehicle_id') and not vals.get('numero_placa'):
+                vehicle = self.env['fleet.vehicle'].browse(vals['vehicle_id'])
+                if vehicle.exists():
+                    vals['numero_placa'] = vehicle.license_plate or False
         return super().create(vals_list)
+
+    def write(self, vals):
+        # Auto-llenar placa cuando se cambia el vehículo
+        if 'vehicle_id' in vals and vals.get('vehicle_id') and 'numero_placa' not in vals:
+            vehicle = self.env['fleet.vehicle'].browse(vals['vehicle_id'])
+            if vehicle.exists():
+                vals['numero_placa'] = vehicle.license_plate or False
+        return super().write(vals)
 
     @api.depends('linea_ids.cantidad')
     def _compute_totales(self):
@@ -169,6 +175,15 @@ class SalidaAcopio(models.Model):
                 name += f" - Manifiesto: {record.manifiesto_salida_id.numero_manifiesto}"
             result.append((record.id, name))
         return result
+
+    @api.onchange('vehicle_id')
+    def _onchange_vehicle_id(self):
+        """Rellena automáticamente la placa desde el vehículo seleccionado."""
+        for rec in self:
+            if rec.vehicle_id:
+                rec.numero_placa = rec.vehicle_id.license_plate or False
+            else:
+                rec.numero_placa = False
 
     def action_confirmar_salida(self):
         self.ensure_one()
@@ -302,12 +317,12 @@ class SalidaAcopio(models.Model):
             parts.append(f"Lote: {linea.lote_id.name}")
         if linea.tipo_manejo_id:
             parts.append(f"Plan de Manejo: {linea.tipo_manejo_id.name}")
-        if self.nombre_operador:
-            parts.append(f"Operador: {self.nombre_operador}")
-        if self.camion:
-            parts.append(f"Camión: {self.camion}")
-        if self.placa:
-            parts.append(f"Placa: {self.placa}")
+        if self.chofer_id:
+            parts.append(f"Chofer: {self.chofer_id.name}")
+        if self.vehicle_id:
+            parts.append(f"Vehículo: {self.vehicle_id.display_name}")
+        if self.numero_placa:
+            parts.append(f"Placa: {self.numero_placa}")
         return "\n".join(parts)
 
     def _create_stock_picking(self):
@@ -320,7 +335,6 @@ class SalidaAcopio(models.Model):
         if not picking_type:
             raise UserError("No se encontró un tipo de operación de salida configurado.")
 
-        # PASO 1: Crear el picking SIN moves (con datos del transporte)
         _logger.info("[ACOPIO] PASO 1: creando picking vacío")
         picking = self.env['stock.picking'].create({
             'picking_type_id': picking_type.id,
@@ -331,13 +345,12 @@ class SalidaAcopio(models.Model):
             'company_id': self.company_id.id,
             'partner_id': self.destinatario_id.id,
             'salida_acopio_id': self.id,
-            'nombre_operador': self.nombre_operador or '',
-            'camion': self.camion or '',
-            'placa': self.placa or '',
+            'chofer_id': self.chofer_id.id if self.chofer_id else False,
+            'vehicle_id': self.vehicle_id.id if self.vehicle_id else False,
+            'numero_placa': self.numero_placa or '',
         })
         _logger.info(f"[ACOPIO] Picking creado: {picking.id} - {picking.name}")
 
-        # PASO 2: Crear cada move INDIVIDUALMENTE con CRETIB y datos del transporte
         moves_created = []
         for idx, linea in enumerate(self.linea_ids, start=1):
             _logger.info(f"[ACOPIO] PASO 2.{idx}: creando move para {linea.producto_id.name}")
@@ -357,20 +370,18 @@ class SalidaAcopio(models.Model):
                 'clasificacion_toxico': linea.clasificacion_toxico,
                 'clasificacion_inflamable': linea.clasificacion_inflamable,
                 'clasificacion_biologico': linea.clasificacion_biologico,
-                'nombre_operador': self.nombre_operador or '',
-                'camion': self.camion or '',
-                'placa': self.placa or '',
+                'chofer_id': self.chofer_id.id if self.chofer_id else False,
+                'vehicle_id': self.vehicle_id.id if self.vehicle_id else False,
+                'numero_placa': self.numero_placa or '',
             }
             move = self.env['stock.move'].create(move_vals)
             _logger.info(f"[ACOPIO] Move creado: {move.id}")
             moves_created.append((move, linea))
 
-        # PASO 3: Confirmar y reservar
         _logger.info("[ACOPIO] PASO 3: action_confirm + action_assign")
         picking.action_confirm()
         picking.action_assign()
 
-        # PASO 4: Asignar lotes y cantidades a las move_lines
         for idx, (move, linea) in enumerate(moves_created, start=1):
             _logger.info(f"[ACOPIO] PASO 4.{idx}: asignando lote/cantidad a move {move.id}")
             if linea.lote_id:
@@ -399,7 +410,7 @@ class SalidaAcopio(models.Model):
                         'location_dest_id': location_customer.id,
                     })
 
-        # PASO 4.5: Re-escribir CRETIB y datos del transporte en los moves
+        # Re-escribir CRETIB y datos del transporte en los moves
         for move, linea in moves_created:
             move.write({
                 'clasificacion_corrosivo': linea.clasificacion_corrosivo,
@@ -409,17 +420,15 @@ class SalidaAcopio(models.Model):
                 'clasificacion_inflamable': linea.clasificacion_inflamable,
                 'clasificacion_biologico': linea.clasificacion_biologico,
                 'description_picking': self._build_move_description(linea),
-                'nombre_operador': self.nombre_operador or '',
-                'camion': self.camion or '',
-                'placa': self.placa or '',
+                'chofer_id': self.chofer_id.id if self.chofer_id else False,
+                'vehicle_id': self.vehicle_id.id if self.vehicle_id else False,
+                'numero_placa': self.numero_placa or '',
             })
 
-        # PASO 5: Marcar picked (Odoo 17+)
         _logger.info("[ACOPIO] PASO 5: marcando moves como picked")
         if 'picked' in self.env['stock.move']._fields:
             picking.move_ids.write({'picked': True})
 
-        # PASO 6: Validar
         _logger.info("[ACOPIO] PASO 6: button_validate")
         try:
             result = picking.with_context(
@@ -460,6 +469,21 @@ class SalidaAcopio(models.Model):
     def _create_manifiesto_salida(self):
         _logger.info("=== INICIO CREACIÓN MANIFIESTO DE SALIDA ===")
         sai_partner = self._get_or_create_sai_partner()
+
+        # Datos del transporte tomados de los relacionales (con fallback al transportista)
+        tipo_vehiculo = (
+            self.vehicle_id.display_name
+            if self.vehicle_id
+            else getattr(self.transportista_id, 'tipo_vehiculo', '') or ''
+        )
+        numero_placa = (
+            self.numero_placa
+            or (self.vehicle_id.license_plate if self.vehicle_id else '')
+            or getattr(self.transportista_id, 'numero_placa', '')
+            or ''
+        )
+        chofer_nombre = self.chofer_id.name if self.chofer_id else ''
+
         manifiesto_vals = {
             'tipo_manifiesto': 'salida',
             'numero_manifiesto': self.numero_referencia,
@@ -481,9 +505,9 @@ class SalidaAcopio(models.Model):
             'numero_autorizacion_semarnat': getattr(self.transportista_id, 'numero_autorizacion_semarnat', '') or '',
             'numero_permiso_sct': getattr(self.transportista_id, 'numero_permiso_sct', '') or '',
             # Datos del transporte (priorizan los capturados en la salida)
-            'tipo_vehiculo': self.camion or getattr(self.transportista_id, 'tipo_vehiculo', '') or '',
-            'numero_placa': self.placa or getattr(self.transportista_id, 'numero_placa', '') or '',
-            'transportista_responsable_nombre': self.nombre_operador or '',
+            'tipo_vehiculo': tipo_vehiculo,
+            'numero_placa': numero_placa,
+            'transportista_responsable_nombre': chofer_nombre,
             'transportista_fecha': self.fecha_salida.date() if self.fecha_salida else fields.Date.context_today(self),
             'destinatario_id': self.destinatario_id.id,
             'destinatario_nombre': self.destinatario_id.name or '',
@@ -586,41 +610,28 @@ class SalidaAcopioLinea(models.Model):
         'product.product', string='Producto/Residuo', required=True,
     )
 
-    lote_id = fields.Many2one(
-        'stock.lot', string='Lote',
-    )
+    lote_id = fields.Many2one('stock.lot', string='Lote')
 
     available_lot_ids = fields.Many2many(
-        'stock.lot',
-        string='Lotes Disponibles',
+        'stock.lot', string='Lotes Disponibles',
         compute='_compute_available_lot_ids',
     )
 
     available_product_ids = fields.Many2many(
-        'product.product',
-        string='Productos Disponibles',
+        'product.product', string='Productos Disponibles',
         compute='_compute_available_product_ids',
     )
 
-    cantidad = fields.Float(
-        string='Cantidad (kg)', required=True, digits=(12, 3)
-    )
+    cantidad = fields.Float(string='Cantidad (kg)', required=True, digits=(12, 3))
 
     stock_disponible = fields.Float(
         string='Stock Disponible',
-        compute='_compute_stock_disponible',
-        store=True,
+        compute='_compute_stock_disponible', store=True,
     )
 
-    nombre_residuo = fields.Char(
-        string='Nombre del Residuo',
-        help='Descripción del residuo (se usa en el manifiesto)'
-    )
+    nombre_residuo = fields.Char(string='Nombre del Residuo')
 
-    residue_type = fields.Selection(
-        RESIDUE_TYPE_SELECTION,
-        string='Tipo de Residuo'
-    )
+    residue_type = fields.Selection(RESIDUE_TYPE_SELECTION, string='Tipo de Residuo')
 
     clasificacion_corrosivo = fields.Boolean(string='Corrosivo (C)')
     clasificacion_reactivo = fields.Boolean(string='Reactivo (R)')
@@ -631,22 +642,15 @@ class SalidaAcopioLinea(models.Model):
 
     clasificaciones_cretib = fields.Char(
         string='Clasificaciones CRETIB',
-        compute='_compute_clasificaciones_cretib',
-        store=True,
+        compute='_compute_clasificaciones_cretib', store=True,
     )
 
-    envase_tipo = fields.Selection(
-        ENVASE_TIPO_SELECTION,
-        string='Tipo de Envase (Legacy)'
-    )
+    envase_tipo = fields.Selection(ENVASE_TIPO_SELECTION, string='Tipo de Envase (Legacy)')
     packaging_id = fields.Many2one('uom.uom', string='Embalaje')
     envase_cantidad = fields.Integer(string='Unidades', default=1)
     envase_capacidad = fields.Char(string='Capacidad')
 
-    tipo_manejo_id = fields.Many2one(
-        'residuo.tipo.manejo',
-        string='Plan de Manejo'
-    )
+    tipo_manejo_id = fields.Many2one('residuo.tipo.manejo', string='Plan de Manejo')
 
     etiqueta_si = fields.Boolean(string='Etiqueta - Sí', default=True)
     etiqueta_no = fields.Boolean(string='Etiqueta - No', default=False)
@@ -691,16 +695,13 @@ class SalidaAcopioLinea(models.Model):
             if not record.producto_id:
                 record.available_lot_ids = [(5, 0, 0)]
                 continue
-
             stock_lots = record._get_lots_with_stock_in_acopio()
             available_ids = set(stock_lots.ids)
-
             if record.salida_id:
                 used_in_same_salida = record.salida_id.linea_ids.filtered(
                     lambda l: l.id != record.id and l.lote_id
                 ).mapped('lote_id').ids
                 available_ids -= set(used_in_same_salida)
-
             if available_ids:
                 ya_usados = record.env['salida.acopio.linea'].search([
                     ('lote_id', 'in', list(available_ids)),
@@ -708,10 +709,8 @@ class SalidaAcopioLinea(models.Model):
                     ('salida_id.state', 'in', ('draft', 'done')),
                 ]).mapped('lote_id').ids
                 available_ids -= set(ya_usados)
-
             if record.lote_id:
                 available_ids.add(record.lote_id.id)
-
             record.available_lot_ids = [(6, 0, list(available_ids))]
 
     @api.depends('producto_id', 'lote_id')
@@ -769,7 +768,6 @@ class SalidaAcopioLinea(models.Model):
         lot = self.lote_id
         if not lot:
             return
-
         cretib_fields = [
             'clasificacion_corrosivo', 'clasificacion_reactivo',
             'clasificacion_explosivo', 'clasificacion_toxico',

@@ -14,20 +14,22 @@ class StockPicking(models.Model):
     es_salida_acopio = fields.Boolean(
         string='Es Salida de Acopio',
         compute='_compute_es_salida_acopio',
-        help='Indica si esta transferencia fue generada por una salida de acopio'
     )
 
-    nombre_operador = fields.Char(
-        string='Nombre del Operador',
+    chofer_id = fields.Many2one(
+        'res.partner',
+        string='Chofer',
         help='Operador / chofer del vehículo'
     )
-    camion = fields.Char(
-        string='Camión',
-        help='Descripción / tipo de vehículo'
+
+    vehicle_id = fields.Many2one(
+        'fleet.vehicle',
+        string='Vehículo',
+        help='Unidad de transporte'
     )
-    placa = fields.Char(
-        string='Placa',
-        help='Número de placa del vehículo'
+
+    numero_placa = fields.Char(
+        string='Número de Placa',
     )
 
     def _compute_es_salida_acopio(self):
@@ -55,7 +57,6 @@ class StockMove(models.Model):
         string='CRETIB',
         compute='_compute_cretib_summary',
         store=True,
-        help='Resumen de las clasificaciones CRETIB del residuo'
     )
 
     tipo_manejo_salida_id = fields.Many2one(
@@ -65,18 +66,19 @@ class StockMove(models.Model):
         store=True,
     )
 
-    nombre_operador = fields.Char(
-        string='Nombre del Operador',
+    chofer_id = fields.Many2one(
+        'res.partner',
+        string='Chofer',
         help='Operador / chofer del vehículo'
     )
-    camion = fields.Char(
-        string='Camión',
-        help='Descripción / tipo de vehículo'
+
+    vehicle_id = fields.Many2one(
+        'fleet.vehicle',
+        string='Vehículo',
+        help='Unidad de transporte'
     )
-    placa = fields.Char(
-        string='Placa',
-        help='Número de placa del vehículo'
-    )
+
+    numero_placa = fields.Char(string='Número de Placa')
 
     @api.depends(
         'clasificacion_corrosivo', 'clasificacion_reactivo', 'clasificacion_explosivo',
@@ -85,16 +87,10 @@ class StockMove(models.Model):
     def _compute_cretib_summary(self):
         for move in self:
             tags = []
-            if move.clasificacion_corrosivo:
-                tags.append('C')
-            if move.clasificacion_reactivo:
-                tags.append('R')
-            if move.clasificacion_explosivo:
-                tags.append('E')
-            if move.clasificacion_toxico:
-                tags.append('T')
-            if move.clasificacion_inflamable:
-                tags.append('I')
-            if move.clasificacion_biologico:
-                tags.append('B')
+            if move.clasificacion_corrosivo: tags.append('C')
+            if move.clasificacion_reactivo: tags.append('R')
+            if move.clasificacion_explosivo: tags.append('E')
+            if move.clasificacion_toxico: tags.append('T')
+            if move.clasificacion_inflamable: tags.append('I')
+            if move.clasificacion_biologico: tags.append('B')
             move.cretib_summary = ', '.join(tags)

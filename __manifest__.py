@@ -6,13 +6,13 @@
     'description': '''
         Salida Acopio para Manifiestos Ambientales
         ==========================================
-        
+
         Este módulo permite realizar salidas automáticas de residuos del inventario
         hacia su disposición final, generando manifiestos donde SAI es el generador.
     ''',
     'author': 'Alphaqueb Consulting',
     'website': 'https://alphaqueb.com',
-    'depends': ['base', 'stock', 'manifiesto_ambiental'],
+    'depends': ['base', 'stock', 'fleet', 'manifiesto_ambiental'],
     'data': [
         'security/ir.model.access.csv',
         'data/stock_data.xml',

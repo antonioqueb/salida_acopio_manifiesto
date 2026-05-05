@@ -42,60 +42,58 @@ class SalidaAcopioWizard(models.TransientModel):
     _description = 'Wizard para Salida de Acopio'
 
     transportista_id = fields.Many2one(
-        'res.partner',
-        string='Transportista',
+        'res.partner', string='Transportista',
         domain=[('is_company', '=', True)],
         default=lambda self: self._get_sai_partner(),
         required=True,
     )
 
     destinatario_id = fields.Many2one(
-        'res.partner',
-        string='Destinatario Final',
+        'res.partner', string='Destinatario Final',
         domain=[('is_company', '=', True)],
         required=True,
     )
 
-    nombre_operador = fields.Char(string='Nombre del Operador')
-    camion = fields.Char(string='Camión')
-    placa = fields.Char(string='Placa')
+    chofer_id = fields.Many2one(
+        'res.partner',
+        string='Chofer',
+        help='Operador / chofer del vehículo. Se busca del catálogo de contactos.'
+    )
+
+    vehicle_id = fields.Many2one(
+        'fleet.vehicle',
+        string='Vehículo',
+        help='Unidad de transporte. Se busca del catálogo de flota.'
+    )
+
+    numero_placa = fields.Char(
+        string='Número de Placa',
+        help='Se rellena automáticamente desde el vehículo seleccionado.'
+    )
 
     linea_ids = fields.One2many(
-        'salida.acopio.wizard.linea',
-        'wizard_id',
+        'salida.acopio.wizard.linea', 'wizard_id',
         string='Residuos a Dar de Salida'
     )
 
-    total_residuos = fields.Integer(
-        string='Total de Residuos',
-        compute='_compute_totales'
-    )
-
-    cantidad_total = fields.Float(
-        string='Cantidad Total (kg)',
-        compute='_compute_totales'
-    )
+    total_residuos = fields.Integer(string='Total de Residuos', compute='_compute_totales')
+    cantidad_total = fields.Float(string='Cantidad Total (kg)', compute='_compute_totales')
 
     observaciones = fields.Text(string='Observaciones')
 
     def _get_sai_partner(self):
         sai_partner = self.env['res.partner'].search([
-            ('is_company', '=', True),
-            ('name', 'ilike', 'SAI')
+            ('is_company', '=', True), ('name', 'ilike', 'SAI')
         ], limit=1)
         if sai_partner:
             return sai_partner.id
         try:
-            transportista = self.env['res.partner'].search([
-                ('es_transportista', '=', True)
-            ], limit=1)
+            transportista = self.env['res.partner'].search([('es_transportista', '=', True)], limit=1)
             if transportista:
                 return transportista.id
         except Exception:
             pass
-        empresa = self.env['res.partner'].search([
-            ('is_company', '=', True)
-        ], limit=1)
+        empresa = self.env['res.partner'].search([('is_company', '=', True)], limit=1)
         return empresa.id if empresa else False
 
     @api.depends('linea_ids.cantidad')
@@ -103,6 +101,14 @@ class SalidaAcopioWizard(models.TransientModel):
         for record in self:
             record.total_residuos = len(record.linea_ids)
             record.cantidad_total = sum(record.linea_ids.mapped('cantidad'))
+
+    @api.onchange('vehicle_id')
+    def _onchange_vehicle_id(self):
+        for rec in self:
+            if rec.vehicle_id:
+                rec.numero_placa = rec.vehicle_id.license_plate or False
+            else:
+                rec.numero_placa = False
 
     def _validate_no_duplicates(self):
         seen = {}
@@ -116,8 +122,7 @@ class SalidaAcopioWizard(models.TransientModel):
             if key in seen:
                 raise UserError(
                     f"⚠️ Residuo duplicado en la salida:\n\n{label}\n\n"
-                    f"Cada lote solo puede aparecer una vez. "
-                    f"Elimine la línea duplicada antes de continuar."
+                    f"Cada lote solo puede aparecer una vez."
                 )
             seen[key] = True
 
@@ -135,8 +140,7 @@ class SalidaAcopioWizard(models.TransientModel):
                     f"⚠️ Lote no disponible:\n\n"
                     f"El lote '{linea.lote_id.name}' del producto "
                     f"'{linea.producto_id.name}' está {estado} la salida "
-                    f"'{otras.salida_id.numero_referencia}'.\n\n"
-                    f"No es posible volver a darle salida."
+                    f"'{otras.salida_id.numero_referencia}'."
                 )
 
     def action_confirmar_salida(self):
@@ -154,9 +158,7 @@ class SalidaAcopioWizard(models.TransientModel):
         lineas_data = []
         for linea in self.linea_ids:
             if not linea.producto_id or not linea.producto_id.id:
-                raise UserError(
-                    f"Una de las líneas no tiene producto asignado. Línea ID: {linea.id}"
-                )
+                raise UserError(f"Una de las líneas no tiene producto asignado.")
             if linea.cantidad <= 0:
                 raise UserError(
                     f"La cantidad para el producto {linea.producto_id.name} debe ser mayor a cero."
@@ -191,19 +193,16 @@ class SalidaAcopioWizard(models.TransientModel):
             salida_vals = {
                 'transportista_id': self.transportista_id.id,
                 'destinatario_id': self.destinatario_id.id,
-                'nombre_operador': self.nombre_operador or '',
-                'camion': self.camion or '',
-                'placa': self.placa or '',
+                'chofer_id': self.chofer_id.id if self.chofer_id else False,
+                'vehicle_id': self.vehicle_id.id if self.vehicle_id else False,
+                'numero_placa': self.numero_placa or '',
                 'observaciones': self.observaciones,
             }
             salida = self.env['salida.acopio'].create(salida_vals)
             _logger.info(f"Creada salida de acopio: {salida.numero_referencia}")
 
             for linea_data in lineas_data:
-                self.env['salida.acopio.linea'].create({
-                    'salida_id': salida.id,
-                    **linea_data,
-                })
+                self.env['salida.acopio.linea'].create({'salida_id': salida.id, **linea_data})
 
             salida.action_confirmar_salida()
 
@@ -225,40 +224,26 @@ class SalidaAcopioWizardLinea(models.TransientModel):
     _description = 'Línea del Wizard de Salida de Acopio'
 
     wizard_id = fields.Many2one(
-        'salida.acopio.wizard',
-        string='Wizard',
-        required=True,
-        ondelete='cascade'
+        'salida.acopio.wizard', string='Wizard',
+        required=True, ondelete='cascade'
     )
 
-    producto_id = fields.Many2one(
-        'product.product',
-        string='Producto/Residuo',
-        required=True,
-    )
-
-    lote_id = fields.Many2one(
-        'stock.lot',
-        string='Lote',
-    )
+    producto_id = fields.Many2one('product.product', string='Producto/Residuo', required=True)
+    lote_id = fields.Many2one('stock.lot', string='Lote')
 
     available_lot_ids = fields.Many2many(
-        'stock.lot',
-        string='Lotes Disponibles',
+        'stock.lot', string='Lotes Disponibles',
         compute='_compute_available_lot_ids',
     )
 
     available_product_ids = fields.Many2many(
-        'product.product',
-        string='Productos Disponibles',
+        'product.product', string='Productos Disponibles',
         compute='_compute_available_product_ids',
     )
 
     cantidad = fields.Float(
         string='Cantidad a Salir (kg)',
-        required=True,
-        digits=(12, 3),
-        default=0.0
+        required=True, digits=(12, 3), default=0.0
     )
 
     stock_disponible = fields.Float(
@@ -267,7 +252,6 @@ class SalidaAcopioWizardLinea(models.TransientModel):
     )
 
     nombre_residuo = fields.Char(string='Nombre del Residuo')
-
     residue_type = fields.Selection(RESIDUE_TYPE_SELECTION, string='Tipo de Residuo')
 
     clasificacion_corrosivo = fields.Boolean(string='Corrosivo (C)')
@@ -277,10 +261,7 @@ class SalidaAcopioWizardLinea(models.TransientModel):
     clasificacion_inflamable = fields.Boolean(string='Inflamable (I)')
     clasificacion_biologico = fields.Boolean(string='Biológico (B)')
 
-    clasificaciones_cretib = fields.Char(
-        string='CRETIB',
-        compute='_compute_clasificaciones_cretib',
-    )
+    clasificaciones_cretib = fields.Char(string='CRETIB', compute='_compute_clasificaciones_cretib')
 
     envase_tipo = fields.Selection(ENVASE_TIPO_SELECTION, string='Tipo de Envase (Legacy)')
     packaging_id = fields.Many2one('uom.uom', string='Embalaje')
@@ -332,26 +313,21 @@ class SalidaAcopioWizardLinea(models.TransientModel):
             if not record.producto_id:
                 record.available_lot_ids = [(5, 0, 0)]
                 continue
-
             stock_lots = record._get_lots_with_stock_in_acopio()
             available_ids = set(stock_lots.ids)
-
             if record.wizard_id:
                 used_in_same_wizard = record.wizard_id.linea_ids.filtered(
                     lambda l: l.id != record.id and l.lote_id
                 ).mapped('lote_id').ids
                 available_ids -= set(used_in_same_wizard)
-
             if available_ids:
                 ya_usados = record.env['salida.acopio.linea'].search([
                     ('lote_id', 'in', list(available_ids)),
                     ('salida_id.state', 'in', ('draft', 'done')),
                 ]).mapped('lote_id').ids
                 available_ids -= set(ya_usados)
-
             if record.lote_id:
                 available_ids.add(record.lote_id.id)
-
             record.available_lot_ids = [(6, 0, list(available_ids))]
 
     @api.depends('producto_id', 'lote_id')
@@ -409,7 +385,6 @@ class SalidaAcopioWizardLinea(models.TransientModel):
         lot = self.lote_id
         if not lot:
             return
-
         cretib_fields = [
             'clasificacion_corrosivo', 'clasificacion_reactivo',
             'clasificacion_explosivo', 'clasificacion_toxico',
@@ -466,7 +441,7 @@ class SalidaAcopioWizardLinea(models.TransientModel):
                         'title': '⚠️ Lote duplicado',
                         'message': (
                             f'El lote "{lote_name}" ya está seleccionado en otra línea '
-                            f'de esta misma salida. Cada lote solo puede aparecer una vez.'
+                            f'de esta misma salida.'
                         )
                     }
                 }
@@ -485,8 +460,7 @@ class SalidaAcopioWizardLinea(models.TransientModel):
                 'warning': {
                     'title': '⚠️ Lote no disponible',
                     'message': (
-                        f'El lote "{lote_name}" está {estado} la salida "{ref}".\n\n'
-                        f'No es posible volver a seleccionarlo.'
+                        f'El lote "{lote_name}" está {estado} la salida "{ref}".'
                     )
                 }
             }
@@ -532,8 +506,8 @@ class SalidaAcopioWizardLinea(models.TransientModel):
         for record in self:
             if record.cantidad > 0 and record.cantidad > record.stock_disponible:
                 raise ValidationError(
-                    f"La cantidad a dar de salida ({record.cantidad} kg) no puede ser mayor "
-                    f"al stock disponible ({record.stock_disponible} kg) para el producto "
+                    f"La cantidad ({record.cantidad} kg) no puede ser mayor "
+                    f"al stock disponible ({record.stock_disponible} kg) para "
                     f"{record.producto_id.name}"
                 )
 
@@ -549,13 +523,9 @@ class SalidaAcopioWizardLinea(models.TransientModel):
             if not record.lote_id or not record.wizard_id:
                 continue
             duplicados = record.wizard_id.linea_ids.filtered(
-                lambda l: l != record
-                and l.lote_id
-                and l.lote_id.id == record.lote_id.id
+                lambda l: l != record and l.lote_id and l.lote_id.id == record.lote_id.id
             )
             if duplicados:
                 raise ValidationError(
-                    f"⚠️ El lote '{record.lote_id.name}' (producto '{record.producto_id.name}') "
-                    f"ya está incluido en otra línea de esta salida. "
-                    f"Cada lote solo puede aparecer una vez."
+                    f"⚠️ El lote '{record.lote_id.name}' ya está incluido en otra línea."
                 )

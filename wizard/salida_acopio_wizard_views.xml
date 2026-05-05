@@ -10,7 +10,6 @@
                     <p>
                         Se van a dar de salida residuos desde la ubicación "Acopio" del inventario
                         y se generará automáticamente un manifiesto ambiental donde <strong>SAI es el generador</strong>.
-                        Al seleccionar un lote, los datos de clasificación y plan de manejo se precargan automáticamente.
                     </p>
                 </div>
 
@@ -24,12 +23,15 @@
                 </group>
 
                 <group string="Datos del Vehículo y Operador" col="3">
-                    <field name="nombre_operador"
-                           placeholder="Ej. Juan Pérez García"/>
-                    <field name="camion"
-                           placeholder="Ej. Kenworth T800 Blanco"/>
-                    <field name="placa"
-                           placeholder="Ej. ABC-123-A"/>
+                    <field name="chofer_id"
+                           options="{'no_create': True}"
+                           placeholder="Seleccionar chofer..."/>
+                    <field name="vehicle_id"
+                           options="{'no_create': True}"
+                           placeholder="Seleccionar vehículo de flota..."/>
+                    <field name="numero_placa"
+                           readonly="1"
+                           placeholder="Se rellena desde el vehículo"/>
                 </group>
 
                 <group string="Resumen" col="2">
@@ -84,8 +86,7 @@
                                     <group string="Identificación del Residuo">
                                         <field name="nombre_residuo"/>
                                         <field name="residue_type"/>
-                                        <field name="tipo_manejo_id"
-                                               options="{'no_create': True}"/>
+                                        <field name="tipo_manejo_id" options="{'no_create': True}"/>
                                     </group>
                                 </group>
 
@@ -125,9 +126,8 @@
                     <ul style="margin: 5px 0;">
                         <li>El selector de lotes solo muestra lotes con stock en Acopio</li>
                         <li>No se pueden seleccionar lotes ya entregados o reservados en otras salidas</li>
-                        <li>No se puede repetir el mismo lote en dos líneas de la misma salida</li>
-                        <li>Al seleccionar un lote, sus datos CRETIB y plan de manejo se precargan automáticamente</li>
-                        <li>Los datos del operador, camión y placa se propagan al picking, a cada movimiento de inventario y al manifiesto</li>
+                        <li>La placa se rellena automáticamente al seleccionar el vehículo de flota</li>
+                        <li>Los datos del chofer, vehículo y placa se propagan al picking, a cada movimiento y al manifiesto</li>
                     </ul>
                 </div>
 
@@ -136,7 +136,7 @@
                             name="action_confirmar_salida"
                             type="object"
                             class="btn-primary"
-                            confirm="¿Está seguro de que desea realizar la salida de acopio? Se crearán movimientos de inventario y un manifiesto ambiental."/>
+                            confirm="¿Está seguro de que desea realizar la salida de acopio?"/>
                     <button string="Cancelar"
                             class="btn-secondary"
                             special="cancel"/>
