@@ -164,14 +164,19 @@ class SalidaAcopio(models.Model):
             if vehicle.exists():
                 vals['numero_placa'] = vehicle.license_plate or False
         res = super().write(vals)
-        # Mantener el número del manifiesto de salida sincronizado con el de la salida.
-        # Así, si se corrige el número del documento de salida, el manifiesto lo respeta.
+        # Mantener el número del manifiesto de salida (y el origen del picking)
+        # sincronizados con el de la salida. Así, si se corrige el folio del
+        # documento de salida, el manifiesto y la transferencia lo respetan.
         nuevo_numero = vals.get('numero_referencia')
         if nuevo_numero and nuevo_numero != '/':
             for salida in self:
                 manifiesto = salida.manifiesto_salida_id
                 if manifiesto and manifiesto.numero_manifiesto != salida.numero_referencia:
                     manifiesto.numero_manifiesto = salida.numero_referencia
+                if salida.picking_id:
+                    nuevo_origin = f"Salida Acopio: {salida.numero_referencia}"
+                    if salida.picking_id.origin != nuevo_origin:
+                        salida.picking_id.origin = nuevo_origin
         return res
 
     @api.depends('linea_ids.cantidad')
