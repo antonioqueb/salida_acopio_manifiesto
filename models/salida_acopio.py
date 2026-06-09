@@ -529,6 +529,11 @@ class SalidaAcopio(models.Model):
             # Datos del transporte (priorizan los capturados en la salida)
             'tipo_vehiculo': tipo_vehiculo,
             'numero_placa': numero_placa,
+            # Relacionales del transporte/operador: se propagan igual que en la salida.
+            # El responsable del transportista es el mismo chofer.
+            'vehicle_id': self.vehicle_id.id if self.vehicle_id else False,
+            'chofer_id': self.chofer_id.id if self.chofer_id else False,
+            'transportista_responsable_id': self.chofer_id.id if self.chofer_id else False,
             'transportista_responsable_nombre': chofer_nombre,
             'transportista_fecha': self.fecha_salida.date() if self.fecha_salida else fields.Date.context_today(self),
             'destinatario_id': self.destinatario_id.id,
@@ -548,6 +553,18 @@ class SalidaAcopio(models.Model):
             'company_id': self.company_id.id,
         }
         manifiesto = self.env['manifiesto.ambiental'].create(manifiesto_vals)
+
+        # Al pasar vehicle_id, el manifiesto recalcula 'tipo_vehiculo' desde las
+        # etiquetas del vehículo; si éste no tiene etiquetas, restauramos el valor
+        # capturado en la salida. La placa se conserva tal cual viene de la salida.
+        fallback_vals = {}
+        if tipo_vehiculo and not manifiesto.tipo_vehiculo:
+            fallback_vals['tipo_vehiculo'] = tipo_vehiculo
+        if numero_placa and not manifiesto.numero_placa:
+            fallback_vals['numero_placa'] = numero_placa
+        if fallback_vals:
+            manifiesto.write(fallback_vals)
+
         _logger.info(f"✅ Manifiesto creado: {manifiesto.numero_manifiesto} (tipo: salida)")
 
         for linea in self.linea_ids:
