@@ -41,6 +41,13 @@ class SalidaAcopioWizard(models.TransientModel):
     _name = 'salida.acopio.wizard'
     _description = 'Wizard para Salida de Acopio'
 
+    numero_referencia = fields.Char(
+        string='Número de Documento de Salida',
+        default='/',
+        help='Número del documento de salida / manifiesto de salida. '
+             'Déjelo en "/" para autogenerarlo automáticamente.'
+    )
+
     transportista_id = fields.Many2one(
         'res.partner', string='Transportista',
         domain=[('is_company', '=', True)],
@@ -192,6 +199,7 @@ class SalidaAcopioWizard(models.TransientModel):
 
         try:
             salida_vals = {
+                'numero_referencia': self.numero_referencia or '/',
                 'transportista_id': self.transportista_id.id,
                 'destinatario_id': self.destinatario_id.id,
                 'chofer_id': self.chofer_id.id if self.chofer_id else False,

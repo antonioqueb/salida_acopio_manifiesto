@@ -16,6 +16,8 @@
                 <!-- Transporte + Vehículo/Operador lado a lado -->
                 <group>
                     <group string="Información del Transporte">
+                        <field name="numero_referencia"
+                               placeholder='Déjelo en "/" para autogenerar el número'/>
                         <field name="transportista_id"
                                placeholder="Transportista (SAI por defecto)..."
                                options="{'no_create': True}"/>

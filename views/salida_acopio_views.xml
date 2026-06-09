@@ -105,7 +105,10 @@
                     </div>
 
                     <div class="oe_title">
-                        <h1><field name="numero_referencia" readonly="1"/></h1>
+                        <label for="numero_referencia" string="Número de Documento de Salida"/>
+                        <h1><field name="numero_referencia"
+                                   readonly="state != 'draft'"
+                                   placeholder="Se autogenera al guardar"/></h1>
                     </div>
 
                     <div class="alert alert-success"

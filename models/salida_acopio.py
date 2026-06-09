@@ -45,7 +45,10 @@ class SalidaAcopio(models.Model):
 
     numero_referencia = fields.Char(
         string='Número de Referencia',
-        required=True, copy=False, readonly=True, default='/'
+        required=True, copy=False, default='/',
+        help='Número del documento de salida de acopio. Se autogenera al crear, '
+             'pero puede editarse mientras la salida está en borrador. '
+             'El manifiesto de salida usará este mismo número.'
     )
 
     manifiesto_salida_id = fields.Many2one(
@@ -160,7 +163,16 @@ class SalidaAcopio(models.Model):
             vehicle = self.env['fleet.vehicle'].browse(vals['vehicle_id'])
             if vehicle.exists():
                 vals['numero_placa'] = vehicle.license_plate or False
-        return super().write(vals)
+        res = super().write(vals)
+        # Mantener el número del manifiesto de salida sincronizado con el de la salida.
+        # Así, si se corrige el número del documento de salida, el manifiesto lo respeta.
+        nuevo_numero = vals.get('numero_referencia')
+        if nuevo_numero and nuevo_numero != '/':
+            for salida in self:
+                manifiesto = salida.manifiesto_salida_id
+                if manifiesto and manifiesto.numero_manifiesto != salida.numero_referencia:
+                    manifiesto.numero_manifiesto = salida.numero_referencia
+        return res
 
     @api.depends('linea_ids.cantidad')
     def _compute_totales(self):
