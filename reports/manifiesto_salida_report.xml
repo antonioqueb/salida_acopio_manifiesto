@@ -152,6 +152,35 @@
                                 word-wrap: break-word;
                             }
 
+                            /*
+                                MISMO FORMATO QUE EL BLOQUE DE RESIDUOS DEL MANIFIESTO DE ENTRADA:
+                                - Todo el contenido de la tabla queda sin negritas.
+                                - Se conservan las mayúsculas de los valores.
+                                - Valores y encabezados centrados horizontal y verticalmente.
+                            */
+                            table.residue-table th,
+                            table.residue-table td,
+                            table.residue-table span,
+                            table.residue-table .value {
+                                font-weight: 400 !important;
+                            }
+
+                            table.residue-table th,
+                            table.residue-table td {
+                                text-align: center !important;
+                                vertical-align: middle !important;
+                            }
+
+                            table.residue-table td .value,
+                            table.residue-table td span {
+                                text-align: center !important;
+                                vertical-align: middle !important;
+                            }
+
+                            table.residue-table td {
+                                height: 22px;
+                            }
+
                             table.signature-section {
                                 width: 100%;
                                 border-collapse: separate;
