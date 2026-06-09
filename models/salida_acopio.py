@@ -167,12 +167,16 @@ class SalidaAcopio(models.Model):
         # Mantener el número del manifiesto de salida (y el origen del picking)
         # sincronizados con el de la salida. Así, si se corrige el folio del
         # documento de salida, el manifiesto y la transferencia lo respetan.
+        # El flag skip_manifiesto_sync evita recursión cuando el cambio viene
+        # del propio manifiesto (sincronización inversa).
         nuevo_numero = vals.get('numero_referencia')
-        if nuevo_numero and nuevo_numero != '/':
+        if nuevo_numero and nuevo_numero != '/' and not self.env.context.get('skip_manifiesto_sync'):
             for salida in self:
                 manifiesto = salida.manifiesto_salida_id
                 if manifiesto and manifiesto.numero_manifiesto != salida.numero_referencia:
-                    manifiesto.numero_manifiesto = salida.numero_referencia
+                    manifiesto.with_context(skip_salida_acopio_sync=True).write({
+                        'numero_manifiesto': salida.numero_referencia,
+                    })
                 if salida.picking_id:
                     nuevo_origin = f"Salida Acopio: {salida.numero_referencia}"
                     if salida.picking_id.origin != nuevo_origin:
